@@ -150,38 +150,40 @@ export default function ShiftTypes() {
               </p>
             </div>
             {/* 人力需求表格：每格直接輸入數字，改完按下方「儲存人力需求」 */}
-            <table className="table table--hc">
-              <thead>
-                <tr>
-                  <th>班別</th>
-                  {DAY_TYPES.map((dt) => (
-                    <th key={dt.value}>{dt.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {workShifts.map((s) => (
-                  <tr key={s.code}>
-                    <td className="table__strong">
-                      <i className="swatch" style={{ background: s.color }} />
-                      {s.name}
-                    </td>
+            <div className="table-card">
+              <table className="table table--hc">
+                <thead>
+                  <tr>
+                    <th>班別</th>
                     {DAY_TYPES.map((dt) => (
-                      <td key={dt.value}>
-                        <input
-                          type="number"
-                          min={0}
-                          max={50}
-                          className="num-input"
-                          value={hcCount(s.code, dt.value)}
-                          onChange={(e) => setHcCount(s.code, dt.value, Number(e.target.value) || 0)}
-                        />
-                      </td>
+                      <th key={dt.value}>{dt.label}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {workShifts.map((s) => (
+                    <tr key={s.code}>
+                      <td className="table__strong">
+                        <i className="swatch" style={{ background: s.color }} />
+                        {s.name}
+                      </td>
+                      {DAY_TYPES.map((dt) => (
+                        <td key={dt.value}>
+                          <input
+                            type="number"
+                            min={0}
+                            max={50}
+                            className="num-input"
+                            value={hcCount(s.code, dt.value)}
+                            onChange={(e) => setHcCount(s.code, dt.value, Number(e.target.value) || 0)}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className="hc__save">
               <button type="button" className="btn btn--primary" disabled={savingHc} onClick={() => void saveHeadcounts()}>
                 {savingHc ? '儲存中…' : '儲存人力需求'}

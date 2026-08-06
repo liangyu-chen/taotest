@@ -195,44 +195,46 @@ export default function Generate() {
                 </div>
               )}
 
-              <table className="table table--result">
-                <thead>
-                  <tr>
-                    <th>員工</th>
-                    <th>類型</th>
-                    {workShifts.map((s) => (
-                      <th key={s.code} className="th--shift" style={{ color: s.color }}>
-                        {s.name}
-                      </th>
-                    ))}
-                    <th>總班數</th>
-                    <th>總時數</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.summary.perEmployee.map((p) => {
-                    const emp = empInfo.get(p.employee_id)
-                    return (
-                      <tr key={p.employee_id}>
-                        <td className="table__strong">{emp?.name || '?'}</td>
-                        <td>
-                          <span className={`badge${emp?.employee_type === 'fulltime' ? ' badge--admin' : ' badge--on'}`}>
-                            {emp?.employee_type === 'fulltime' ? '正職' : '工讀'}
-                          </span>
-                        </td>
-                        {workShifts.map((s) => (
-                          <td key={s.code}>{p.perShift[s.code] || 0}</td>
-                        ))}
-                        <td className="table__strong">{p.total}</td>
-                        <td>
-                          {p.hours}
-                          <em className="table__hint">/ {p.targetHours}h</em>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+              <div className="table-card">
+                <table className="table table--result">
+                  <thead>
+                    <tr>
+                      <th>員工</th>
+                      <th>類型</th>
+                      {workShifts.map((s) => (
+                        <th key={s.code} className="th--shift" style={{ color: s.color }}>
+                          {s.name}
+                        </th>
+                      ))}
+                      <th>總班數</th>
+                      <th>總時數</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.summary.perEmployee.map((p) => {
+                      const emp = empInfo.get(p.employee_id)
+                      return (
+                        <tr key={p.employee_id}>
+                          <td className="table__strong">{emp?.name || '?'}</td>
+                          <td>
+                            <span className={`badge${emp?.employee_type === 'fulltime' ? ' badge--admin' : ' badge--on'}`}>
+                              {emp?.employee_type === 'fulltime' ? '正職' : '工讀'}
+                            </span>
+                          </td>
+                          {workShifts.map((s) => (
+                            <td key={s.code}>{p.perShift[s.code] || 0}</td>
+                          ))}
+                          <td className="table__strong">{p.total}</td>
+                          <td>
+                            {p.hours}
+                            <em className="table__hint">/ {p.targetHours}h</em>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
               <p className="hint">
                  產生後會覆蓋該月份原有班表；可再到〈班表總覽〉手動微調。目標時數：正職＝平日天數×每班時數；工讀無每週上限，依每班時數×當月天數比例公平輪班。
               </p>
