@@ -119,7 +119,7 @@ export function statusPalette(
 ): { bg: string; fg: string; bar: string; border: string } {
   if (rec?.status === 'off') return { bg: '#FBE9E8', fg: '#7f1d1d', bar: '#dc2626', border: '#F3C6C3' }
   if (rec?.status === 'unavailable') return { bg: '#F4F4F5', fg: '#52525B', bar: '#6b7280', border: '#D4D4D8' }
-  if (rec && rec.status !== 'available' && preferShift) return preferColors(preferShift)
+  if (preferShift && (!rec || rec.status !== 'available')) return preferColors(preferShift)
   return { bg: '#E7F4EC', fg: '#14532d', bar: '#16a34a', border: '#C2E3CB' }
 }
 

@@ -2282,8 +2282,11 @@ button.shift-chip:not(.shift-chip--add):hover {
     font-size: calc(18px * var(--font-scale));
   }
   html:not([data-view="desktop"]) .monthnav__btn--text {
+    width: auto;
     height: 42px;
     padding: 0 12px;
+    font-size: calc(12px * var(--font-scale));
+    white-space: nowrap;
   }
   html:not([data-view="desktop"]) .monthnav__label {
     flex: 1;
@@ -2708,8 +2711,11 @@ button.shift-chip:not(.shift-chip--add):hover {
     font-size: calc(18px * var(--font-scale));
   }
   html[data-view="mobile"] .monthnav__btn--text {
+    width: auto;
     height: 42px;
     padding: 0 12px;
+    font-size: calc(12px * var(--font-scale));
+    white-space: nowrap;
   }
   html[data-view="mobile"] .monthnav__label {
     flex: 1;
