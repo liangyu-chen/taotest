@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../api'
 
 // =============================================================
@@ -50,7 +51,7 @@ export function Modal({
     return () => document.documentElement.classList.remove('modal-open')
   }, [])
 
-  return (
+  return createPortal(
     <div
       className="modal-backdrop"
       onMouseDown={(e) => {
@@ -70,7 +71,8 @@ export function Modal({
         </header>
         <div className="modal__body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
