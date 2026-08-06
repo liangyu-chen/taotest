@@ -2905,10 +2905,12 @@ html[data-view="desktop"] .view__head {
   flex-wrap: wrap;
 }
 
-/* 窄螢幕（≤899px）強制電腦版：側欄照常顯示在左側（不收成抽屜），
-   內容過寬時在各自區塊內左右滑動；頁面高度不鎖死，內容多時自然往下捲。 */
+/* 窄螢幕（≤899px）強制電腦版：整個版面（左側目錄＋內容）保持電腦版寬度，
+   兩者為同一個整體，直接左右滑動整頁觀看；
+   上下高度不鎖死，內容多時自然往下捲動。 */
 @media (max-width: 899px) {
   html[data-view="desktop"] .shell {
+    width: 1280px;
     height: auto;
     min-height: 100vh;
     min-height: 100dvh;
@@ -2917,36 +2919,5 @@ html[data-view="desktop"] .view__head {
   html[data-view="desktop"] .main {
     height: auto;
     min-height: 0;
-  }
-
-  /* 側欄佔 238px 後，topbar 剩餘寬度不足時改為可換行＋可橫向滑動，
-     控制項不會被切掉或互相遮蔽 */
-  html[data-view="desktop"] .topbar {
-    flex-wrap: wrap;
-    row-gap: 8px;
-    column-gap: 12px;
-    padding: 12px 16px;
-    overflow-x: auto;
-  }
-
-  html[data-view="desktop"] .topbar__title {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: calc(15px * var(--font-scale));
-    letter-spacing: 0;
-  }
-
-  html[data-view="desktop"] .topbar__actions {
-    flex: 1 1 100%;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    gap: 8px;
-  }
-
-  html[data-view="desktop"] .topbar__actions > * {
-    flex: none;
   }
 }
