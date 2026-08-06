@@ -575,6 +575,7 @@ textarea.holiday-input:focus {
 .modal-backdrop {
   position: fixed;
   inset: 0;
+  height: 100dvh;
   background: rgba(32, 27, 16, 0.5);
   backdrop-filter: blur(3px);
   display: grid;
@@ -593,7 +594,7 @@ textarea.holiday-input:focus {
 .modal {
   width: 440px;
   max-width: 100%;
-  max-height: min(86vh, calc(100dvh - 40px));
+  max-height: calc(100dvh - 40px);
   overflow: auto;
   overscroll-behavior: contain;
   background: var(--panel);
@@ -2354,7 +2355,7 @@ button.shift-chip:not(.shift-chip--add):hover {
     padding: 10px;
   }
   html:not([data-view="desktop"]) .modal {
-    max-height: min(92vh, calc(100dvh - 20px));
+    max-height: calc(100dvh - 20px);
     border-radius: 12px;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
@@ -2753,7 +2754,7 @@ button.shift-chip:not(.shift-chip--add):hover {
     padding: 10px;
   }
   html[data-view="mobile"] .modal {
-    max-height: min(92vh, calc(100dvh - 20px));
+    max-height: calc(100dvh - 20px);
     border-radius: 12px;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
@@ -2862,3 +2863,13 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .login-card {
     padding: 26px 20px 22px;
   }
+
+/* 強制電腦版：窄螢幕（手機）下行事曆保持桌面寬度，
+   改成左右滑動觀看，避免 7 欄被壓扁 */
+html[data-view="desktop"] .cal {
+  min-width: 920px;
+}
+
+html[data-view="desktop"] .view__head {
+  flex-wrap: wrap;
+}
