@@ -427,7 +427,7 @@ export default function AvailabilityView() {
                 const pal = statusPalette(undefined, s)
                 return (
                   <span key={s.code} className="legend__item">
-                    <i className="legend-dot--prefer" style={{ background: pal.bg, borderColor: pal.bar }} />
+                    <i className="legend-dot--prefer" style={{ background: pal.bar }} />
                     <ShiftIcon shift={s} /> 偏好{s.name}
                   </span>
                 )
@@ -537,7 +537,7 @@ export default function AvailabilityView() {
               const pal = statusPalette(undefined, s)
               return (
                 <span key={s.code} className="legend__item">
-                  <i className="legend-dot--prefer" style={{ background: pal.bg, borderColor: pal.bar }} />
+                  <i className="legend-dot--prefer" style={{ background: pal.bar }} />
                   <ShiftIcon shift={s} /> 偏好{s.name}
                 </span>
               )

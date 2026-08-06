@@ -2460,6 +2460,15 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) textarea.holiday-input {
     min-height: 100px;
   }
+  html:not([data-view="desktop"]) input[type="time"],
+  html:not([data-view="desktop"]) input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
   html:not([data-view="desktop"]) .table-card {
     padding: 4px;
     border-radius: 10px;
@@ -2888,6 +2897,15 @@ button.shift-chip:not(.shift-chip--add):hover {
   }
   html[data-view="mobile"] textarea.holiday-input {
     min-height: 100px;
+  }
+  html[data-view="mobile"] input[type="time"],
+  html[data-view="mobile"] input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow: hidden;
   }
   html[data-view="mobile"] .table-card {
     padding: 4px;
