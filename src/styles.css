@@ -232,22 +232,6 @@ code,
   flex: none;
 }
 
-/* 窄螢幕強制電腦版時才顯示的選單按鈕（點開左側抽屜），其餘情況隱藏 */
-.topbar__menu {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--ink);
-  font-size: 17px;
-  cursor: pointer;
-  flex: none;
-}
-
 .topbar__title {
   font-family: "Noto Serif TC", serif;
   font-size: calc(19px * var(--font-scale));
@@ -2921,57 +2905,28 @@ html[data-view="desktop"] .view__head {
   flex-wrap: wrap;
 }
 
-/* 窄螢幕（<=899px）強制電腦版：左側選單改為抽屜（預設收起），
-   讓內容拿滿整個螢幕寬；點 topbar 的 ☰ 展開、點選單或遮罩收起。
-   避免 238px 的側欄在手機會吃掉大半寬度、內容被擠到無法滑動。 */
+/* 窄螢幕（≤899px）強制電腦版：側欄照常顯示在左側（不收成抽屜），
+   內容過寬時在各自區塊內左右滑動；頁面高度不鎖死，內容多時自然往下捲。 */
 @media (max-width: 899px) {
   html[data-view="desktop"] .shell {
-    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 
-  html[data-view="desktop"] .sidebar {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: 238px;
-    z-index: 70;
-    transform: translateX(-100%);
-    transition: transform 0.22s ease;
-    overflow-y: auto;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+  html[data-view="desktop"] .main {
+    height: auto;
+    min-height: 0;
   }
 
-  html[data-view="desktop"].sidebar-open .sidebar {
-    transform: none;
-  }
-
-  html[data-view="desktop"] .sidebar-scrim {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.45);
-    z-index: 69;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.22s ease;
-  }
-
-  html[data-view="desktop"].sidebar-open .sidebar-scrim {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  html[data-view="desktop"] .topbar__menu {
-    display: inline-flex;
-  }
-
-  /* 抽屜模式下 topbar 改兩行：第一行 ☰＋標題，第二行整排放控制項。
-     避免單行塞不下（標題被擠扁、修改密碼/登出被畫面切掉、按鈕文字換行長高） */
+  /* 側欄佔 238px 後，topbar 剩餘寬度不足時改為可換行＋可橫向滑動，
+     控制項不會被切掉或互相遮蔽 */
   html[data-view="desktop"] .topbar {
     flex-wrap: wrap;
     row-gap: 8px;
-    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
-    gap: 8px;
+    column-gap: 12px;
+    padding: 12px 16px;
+    overflow-x: auto;
   }
 
   html[data-view="desktop"] .topbar__title {
@@ -2986,36 +2941,12 @@ html[data-view="desktop"] .view__head {
 
   html[data-view="desktop"] .topbar__actions {
     flex: 1 1 100%;
-    justify-content: flex-end;
-    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
   }
 
-  /* 動作區內部項目保持原始大小，不要被壓縮導致文字換行 */
   html[data-view="desktop"] .topbar__actions > * {
     flex: none;
-  }
-
-  html[data-view="desktop"] .topbar__actions .btn--ghost {
-    padding: 0 10px;
-    height: 32px;
-    font-size: calc(12px * var(--font-scale));
-  }
-
-  html[data-view="desktop"] .font-size {
-    gap: 4px;
-    margin-right: 0;
-  }
-
-  html[data-view="desktop"] .font-size__label {
-    display: none;
-  }
-
-  html[data-view="desktop"] .seg__btn {
-    padding: 4px 6px;
-    font-size: calc(11px * var(--font-scale));
-  }
-
-  html[data-view="desktop"] .view-mode .seg__btn {
-    padding: 4px 5px;
   }
 }
