@@ -42,6 +42,14 @@ export function Modal({
 }) {
   // 記錄滑鼠按下時是否點在「內容」上：若是，放開時即使在背景也不關閉（避免拖曳選取後誤關）
   const pressInside = useRef(false)
+
+  // 開啟時鎖定頁面捲動：避免 iOS 上 fixed 彈窗被捲動中的 .content 擠偏移（右側被蓋住），
+  // 也避免背景內容跟著捲動
+  useEffect(() => {
+    document.documentElement.classList.add('modal-open')
+    return () => document.documentElement.classList.remove('modal-open')
+  }, [])
+
   return (
     <div
       className="modal-backdrop"

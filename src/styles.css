@@ -578,8 +578,9 @@ textarea.holiday-input:focus {
   height: 100dvh;
   background: rgba(32, 27, 16, 0.5);
   backdrop-filter: blur(3px);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 50;
   padding: 20px;
   animation: fade-in 0.15s ease-out;
@@ -606,6 +607,17 @@ textarea.holiday-input:focus {
 
 .modal--wide {
   width: 640px;
+}
+
+/* 彈窗開啟時鎖定頁面捲動（Modal 元件會把 modal-open 加到 <html>）。
+   若不鎖定，iOS 上固定定位的彈窗會被捲動中的捲動容器擠偏，右側被蓋住 */
+html.modal-open,
+html.modal-open body {
+  overflow: hidden;
+}
+
+html.modal-open .content {
+  overflow: hidden;
 }
 
 @keyframes rise {
@@ -2202,10 +2214,13 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) .topbar {
     padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
     gap: 8px;
-    flex-wrap: wrap;
-    row-gap: 6px;
   }
   html:not([data-view="desktop"]) .topbar__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: calc(15px * var(--font-scale));
     letter-spacing: 0;
   }
@@ -2225,11 +2240,11 @@ button.shift-chip:not(.shift-chip--add):hover {
     display: none;
   }
   html:not([data-view="desktop"]) .seg__btn {
-    padding: 4px 9px;
+    padding: 4px 6px;
     font-size: calc(11px * var(--font-scale));
   }
   html:not([data-view="desktop"]) .view-mode .seg__btn {
-    padding: 4px 7px;
+    padding: 4px 5px;
   }
   html:not([data-view="desktop"]) .view {
     padding: 14px 12px 40px;
@@ -2601,10 +2616,13 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .topbar {
     padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
     gap: 8px;
-    flex-wrap: wrap;
-    row-gap: 6px;
   }
   html[data-view="mobile"] .topbar__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: calc(15px * var(--font-scale));
     letter-spacing: 0;
   }
@@ -2624,11 +2642,11 @@ button.shift-chip:not(.shift-chip--add):hover {
     display: none;
   }
   html[data-view="mobile"] .seg__btn {
-    padding: 4px 9px;
+    padding: 4px 6px;
     font-size: calc(11px * var(--font-scale));
   }
   html[data-view="mobile"] .view-mode .seg__btn {
-    padding: 4px 7px;
+    padding: 4px 5px;
   }
   html[data-view="mobile"] .view {
     padding: 14px 12px 40px;
