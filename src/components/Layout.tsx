@@ -73,6 +73,15 @@ export default function Layout({ children }: { children: ReactNode }) {
     localStorage.setItem('view-mode', viewMode)
   }, [viewMode])
 
+  // 窄螢幕強制電腦版時，左側選單改成抽屜（預設收起，點 ☰ 展開）
+  const [navOpen, setNavOpen] = useState(false)
+  useEffect(() => {
+    const root = document.documentElement
+    if (navOpen) root.classList.add('sidebar-open')
+    else root.classList.remove('sidebar-open')
+    return () => root.classList.remove('sidebar-open')
+  }, [navOpen])
+
   // 左側選單項目；管理功能只有管理員看得到
   const items = [
     { to: '/', label: '班表總覽', icon: '▦', adminOnly: false },
@@ -90,6 +99,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="shell">
+      <div className="sidebar-scrim" onClick={() => setNavOpen(false)} />
       <aside className="sidebar">
         <div className="sidebar__brand">
           <span className="sidebar__mark">班</span>
@@ -103,6 +113,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={() => setNavOpen(false)}
               className={({ isActive }) => `nav-item${isActive ? ' nav-item--active' : ''}`}
             >
               <span className="nav-item__icon">{item.icon}</span>
@@ -126,6 +137,9 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="main">
         <header className="topbar">
+          <button type="button" className="topbar__menu" onClick={() => setNavOpen(true)} aria-label="開啟選單">
+            ☰
+          </button>
           <h2 className="topbar__title">{TITLES[location.pathname] || '排班管理系統'}</h2>
           <div className="topbar__actions">
             <div className="font-size view-mode">

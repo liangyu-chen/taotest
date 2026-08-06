@@ -232,6 +232,22 @@ code,
   flex: none;
 }
 
+/* 窄螢幕強制電腦版時才顯示的選單按鈕（點開左側抽屜），其餘情況隱藏 */
+.topbar__menu {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 17px;
+  cursor: pointer;
+  flex: none;
+}
+
 .topbar__title {
   font-family: "Noto Serif TC", serif;
   font-size: calc(19px * var(--font-scale));
@@ -2894,4 +2910,73 @@ html[data-view="desktop"] .cal {
 
 html[data-view="desktop"] .view__head {
   flex-wrap: wrap;
+}
+
+/* 窄螢幕（<=899px）強制電腦版：左側選單改為抽屜（預設收起），
+   讓內容拿滿整個螢幕寬；點 topbar 的 ☰ 展開、點選單或遮罩收起。
+   避免 238px 的側欄在手機會吃掉大半寬度、內容被擠到無法滑動。 */
+@media (max-width: 899px) {
+  html[data-view="desktop"] .shell {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-view="desktop"] .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 238px;
+    z-index: 70;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    overflow-y: auto;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html[data-view="desktop"].sidebar-open .sidebar {
+    transform: none;
+  }
+
+  html[data-view="desktop"] .sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 69;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+
+  html[data-view="desktop"].sidebar-open .sidebar-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  html[data-view="desktop"] .topbar__menu {
+    display: inline-flex;
+  }
+
+  /* 抽屜模式下 topbar 也壓成單行：標題收縮、動作區可橫向滑動 */
+  html[data-view="desktop"] .topbar {
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
+    gap: 8px;
+  }
+
+  html[data-view="desktop"] .topbar__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  html[data-view="desktop"] .topbar__actions {
+    overflow-x: auto;
+    flex: none;
+  }
+
+  html[data-view="desktop"] .seg__btn {
+    padding: 4px 6px;
+    font-size: calc(11px * var(--font-scale));
+  }
 }
