@@ -2106,6 +2106,9 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) .shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
   html:not([data-view="desktop"]) .main {
     height: auto;
@@ -2179,7 +2182,9 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) .shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
-    height: 100dvh;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
   html:not([data-view="desktop"]) .login-page {
     height: 100dvh;
@@ -2511,6 +2516,9 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
   html[data-view="mobile"] .main {
     height: auto;
@@ -2581,7 +2589,9 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
-    height: 100dvh;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
   html[data-view="mobile"] .login-page {
     height: 100dvh;
