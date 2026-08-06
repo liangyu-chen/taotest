@@ -1,0 +1,358 @@
+import { useCallback, useEffect, useState } from 'react'
+import { api } from '../api'
+import type { Employee, User } from '../types'
+import { EMPLOYEE_COLORS } from '../types'
+import { Modal, Field, Spinner, toast } from '../components/ui'
+
+// =============================================================
+// Employees.tsx —— 員工管理（管理員）
+// 員工名單表格 + 三個彈窗：
+//   新增/編輯員工（含代表色挑選，每人顏色須不同）、
+//   為員工建立登入帳號。
+// =============================================================
+
+export default function Employees() {
+  const [rows, setRows] = useState<Employee[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<Employee | null>(null) // 正在編輯的員工（null = 沒開）
+  const [creating, setCreating] = useState(false)               // 是否開「新增員工」
+  const [accountFor, setAccountFor] = useState<Employee | null>(null) // 正在建帳號的員工
+
+  // 抓員工 + 帳號兩份資料（判斷哪些員工已有登入帳號）
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [e, u] = await Promise.all([
+        api<{ employees: Employee[] }>('/employees'),
+        api<{ users: User[] }>('/users'),
+      ])
+      setRows(e.employees)
+      setUsers(u.users)
+    } catch (err) {
+      toast((err as Error).message, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  async function remove(row: Employee) {
+    if (!window.confirm(`確定刪除員工「${row.name}」？此操作無法復原。`)) return
+    try {
+      await api(`/employees/${row.id}`, { method: 'DELETE' })
+      toast('已刪除')
+      await load()
+    } catch (err) {
+      toast((err as Error).message, 'error')
+    }
+  }
+
+  // 找出某員工綁定的登入帳號（沒有的話顯示「建立登入帳號」按鈕）
+  const linkedUser = (emp: Employee) => users.find((u) => u.employee_id === emp.id)
+
+  return (
+    <div className="view">
+      <div className="view__head">
+        <h3 className="view__title">員工名單</h3>
+        <button type="button" className="btn btn--primary" onClick={() => setCreating(true)}>
+          ＋ 新增員工
+        </button>
+      </div>
+
+      {loading ? (
+        <Spinner label="載入中…" />
+      ) : rows.length === 0 ? (
+        <p className="empty-note">尚未有員工，請點右上「新增員工」。</p>
+      ) : (
+        <div className="table-card">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>姓名</th>
+                <th>員工編號</th>
+                <th>部門</th>
+                <th>類型</th>
+                <th>每班時數</th>
+                <th>登入帳號</th>
+                <th>狀態</th>
+                <th className="table__actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const acc = linkedUser(row)
+                return (
+                  <tr key={row.id} className={row.active === '0' ? 'row--inactive' : ''}>
+                    <td className="table__strong">
+                      <span className="emp-color-dot" style={{ background: row.color || '#6b7280' }} />
+                      {row.name}
+                    </td>
+                    <td>{row.employee_no || '—'}</td>
+                    <td>{row.department || '—'}</td>
+                    <td>
+                      <span className={`badge${row.employee_type === 'fulltime' ? ' badge--admin' : ' badge--on'}`}>
+                        {row.employee_type === 'fulltime' ? '正職' : '工讀'}
+                      </span>
+                    </td>
+                    <td>{row.shift_hours ? `${row.shift_hours} 小時` : '—'}</td>
+                    <td>
+                      {acc ? (
+                        <code className="mono">{acc.username}</code>
+                      ) : (
+                        <button type="button" className="btn btn--small" onClick={() => setAccountFor(row)}>
+                          ＋ 建立登入帳號
+                        </button>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge${row.active === '0' ? ' badge--off' : ' badge--on'}`}>
+                        {row.active === '0' ? '停用' : '在職'}
+                      </span>
+                    </td>
+                    <td className="table__actions">
+                      <button type="button" className="btn btn--small" onClick={() => setEditing(row)}>
+                        編輯
+                      </button>
+                      <button type="button" className="btn btn--small btn--danger" onClick={() => void remove(row)}>
+                        刪除
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {(creating || editing) && (
+        <EmployeeModal
+          employee={editing}
+          takenColors={rows.filter((r) => r.id !== editing?.id).map((r) => r.color).filter(Boolean)}
+          onClose={() => {
+            setCreating(false)
+            setEditing(null)
+          }}
+          onSaved={() => {
+            setCreating(false)
+            setEditing(null)
+            void load()
+          }}
+        />
+      )}
+
+      {accountFor && (
+        <AccountModal
+          employee={accountFor}
+          onClose={() => setAccountFor(null)}
+          onSaved={() => {
+            setAccountFor(null)
+            void load()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// 為員工建立登入帳號的彈窗：送出後員工即可登入並自行設定排休/偏好
+function AccountModal({
+  employee,
+  onClose,
+  onSaved,
+}: {
+  employee: Employee
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [username, setUsername] = useState(employee.employee_no || '')
+  const [password, setPassword] = useState('1234')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    if (!username.trim() || !password) {
+      setError('請輸入帳號與密碼')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await api('/users', {
+        method: 'POST',
+        body: {
+          username: username.trim(),
+          password,
+          display_name: employee.name,
+          role: 'user',
+          employee_id: employee.id,
+        },
+      })
+      toast(`已建立帳號：${username.trim()} / ${password}`)
+      onSaved()
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title={`建立登入帳號・${employee.name}`} onClose={onClose}>
+      <div className="stack">
+        <p className="modal-lead">員工建立帳號後即可登入系統，自行設定可空出／沒空時段與排休。</p>
+        <Field label="登入帳號 *">
+          <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
+        </Field>
+        <Field label="密碼 *（至少 4 碼）">
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+        </Field>
+        {error && <p className="form-error">{error}</p>}
+        <div className="modal__actions">
+          <button type="button" className="btn" onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void submit()}>
+            {busy ? '儲存中…' : '建立'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// 新增/編輯員工彈窗。takenColors 是其他員工已使用的顏色（會被停用，避免撞色）
+function EmployeeModal({
+  employee,
+  takenColors,
+  onClose,
+  onSaved,
+}: {
+  employee: Employee | null
+  takenColors: string[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [name, setName] = useState(employee?.name || '')
+  const [no, setNo] = useState(employee?.employee_no || '')
+  const [dept, setDept] = useState(employee?.department || '')
+  const [empType, setEmpType] = useState<'fulltime' | 'parttime'>(employee?.employee_type || 'parttime')
+  const [shiftHours, setShiftHours] = useState(employee?.shift_hours || '')
+  // 代表色：編輯時沿用原色；新增時自動挑一個還沒被用的顏色
+  const [color, setColor] = useState(
+    employee?.color || EMPLOYEE_COLORS.find((c) => !takenColors.includes(c)) || '',
+  )
+  const [active, setActive] = useState(employee ? employee.active !== '0' : true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    if (!name.trim()) {
+      setError('請輸入員工姓名')
+      return
+    }
+    if (!color) {
+      setError('請選擇代表顏色')
+      return
+    }
+    if (takenColors.includes(color)) {
+      setError('此顏色已被其他員工使用，每位員工需有不同顏色')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      const body = {
+        name: name.trim(),
+        employee_no: no.trim(),
+        department: dept.trim(),
+        employee_type: empType,
+        shift_hours: shiftHours.trim(),
+        color,
+        active,
+      }
+      if (employee) {
+        await api(`/employees/${employee.id}`, { method: 'PUT', body })
+      } else {
+        await api('/employees', { method: 'POST', body })
+      }
+      toast(employee ? '已更新' : '已新增員工')
+      onSaved()
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title={employee ? '編輯員工' : '新增員工'} onClose={onClose}>
+      <div className="stack">
+        <Field label="姓名 *">
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </Field>
+        <div className="form-row">
+          <Field label="員工編號">
+            <input value={no} onChange={(e) => setNo(e.target.value)} />
+          </Field>
+          <Field label="部門">
+            <input value={dept} onChange={(e) => setDept(e.target.value)} />
+          </Field>
+        </div>
+        <Field label="人員類型">
+          <select value={empType} onChange={(e) => setEmpType(e.target.value as 'fulltime' | 'parttime')}>
+            <option value="fulltime">正職（每班固定時數）</option>
+            <option value="parttime">工讀（時數可自由安排）</option>
+          </select>
+        </Field>
+        <div className="form-row">
+          <Field label={empType === 'fulltime' ? '每班時數（由排班規則決定）' : '每班時數（留空用預設值）'}>
+            <input
+              type="number"
+              min={1}
+              max={24}
+              value={shiftHours}
+              onChange={(e) => setShiftHours(e.target.value)}
+              disabled={empType === 'fulltime'}
+              placeholder={empType === 'fulltime' ? '規則設定值' : '例如 6'}
+            />
+          </Field>
+        </div>
+        <Field label="代表顏色 *（每位員工需不同，班表會以顏色區分員工）">
+          {/* 顏色調色盤：已被別人用的顏色會停用（disabled） */}
+          <div className="color-picker">
+            {EMPLOYEE_COLORS.map((c) => {
+              const taken = takenColors.includes(c) && c !== color
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  className={`color-swatch${color === c ? ' color-swatch--active' : ''}`}
+                  style={{ background: c }}
+                  disabled={taken}
+                  title={taken ? '已被其他員工使用' : c}
+                  onClick={() => setColor(c)}
+                />
+              )
+            })}
+          </div>
+        </Field>
+        <label className="check-row">
+          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+          <span>在職（停用後不會被自動排班）</span>
+        </label>
+        {error && <p className="form-error">{error}</p>}
+        <div className="modal__actions">
+          <button type="button" className="btn" onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void submit()}>
+            {busy ? '儲存中…' : '儲存'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
