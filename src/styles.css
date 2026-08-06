@@ -2273,6 +2273,7 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) .monthnav {
     width: 100%;
     justify-content: space-between;
+    gap: 4px;
     padding: 5px;
   }
   html:not([data-view="desktop"]) .monthnav__btn {
@@ -2283,6 +2284,13 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) .monthnav__btn--text {
     height: 42px;
     padding: 0 12px;
+  }
+  html:not([data-view="desktop"]) .monthnav__label {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   html:not([data-view="desktop"]) .cal {
     padding: 10px;
@@ -2372,6 +2380,17 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) .form-row {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+  html:not([data-view="desktop"]) .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  html:not([data-view="desktop"]) .form-grid .field {
+    min-width: 0;
+  }
+  html:not([data-view="desktop"]) .form-grid input,
+  html:not([data-view="desktop"]) .form-grid select {
+    min-width: 0;
   }
   html:not([data-view="desktop"]) .modal-backdrop {
     padding: 10px;
@@ -2680,6 +2699,7 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .monthnav {
     width: 100%;
     justify-content: space-between;
+    gap: 4px;
     padding: 5px;
   }
   html[data-view="mobile"] .monthnav__btn {
@@ -2690,6 +2710,13 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .monthnav__btn--text {
     height: 42px;
     padding: 0 12px;
+  }
+  html[data-view="mobile"] .monthnav__label {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   html[data-view="mobile"] .cal {
     padding: 10px;
@@ -2779,6 +2806,17 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .form-row {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+  html[data-view="mobile"] .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  html[data-view="mobile"] .form-grid .field {
+    min-width: 0;
+  }
+  html[data-view="mobile"] .form-grid input,
+  html[data-view="mobile"] .form-grid select {
+    min-width: 0;
   }
   html[data-view="mobile"] .modal-backdrop {
     padding: 10px;

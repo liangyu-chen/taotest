@@ -419,7 +419,7 @@ export default function Schedule() {
     return (
       <div key={day} className={`cal-cell${isToday ? ' cal-cell--today' : ''}${hasShort ? ' cal-cell--short' : ''}`}>
         <div className="cal-cell__head">
-          <span className="cal-cell__day">{day}</span>
+          <span className="cal-cell__day">{month}/{day}</span>
           <span className="cal-cell__week">{weekday}</span>
           <span className="cal-cell__flags">
             {hasShort && (

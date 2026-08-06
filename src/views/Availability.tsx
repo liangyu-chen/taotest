@@ -453,7 +453,7 @@ export default function AvailabilityView() {
                   return (
                     <div key={day} className={`cal-cell avail-overview${isToday ? ' cal-cell--today' : ''}`}>
                       <div className="cal-cell__head">
-                        <span className="cal-cell__day">{day}</span>
+                        <span className="cal-cell__day">{month}/{day}</span>
                         <span className="cal-cell__week">{WEEKDAYS[(offset + day - 1) % 7]}</span>
                       </div>
                       <div className="cal-cell__avail">
@@ -587,7 +587,7 @@ export default function AvailabilityView() {
                     openDay(day)
                   }}
                 >
-                  <span className="avail-cell__day">{day}</span>
+                  <span className="avail-cell__day">{month}/{day}</span>
                   {renderCellTag(rec)}
                   {!rec && <span className="avail-cell__normal">可排班</span>}
                 </button>
