@@ -593,8 +593,9 @@ textarea.holiday-input:focus {
 .modal {
   width: 440px;
   max-width: 100%;
-  max-height: 86vh;
+  max-height: min(86vh, calc(100dvh - 40px));
   overflow: auto;
+  overscroll-behavior: contain;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -2067,19 +2068,18 @@ button.shift-chip:not(.shift-chip--add):hover {
 
 /* ---------- Responsive ---------- */
 
-/* 平板（≤900px）：左側選單改為上方的橫式選單 */
+/* 平板（≤900px）：左側選單改為上方的橫式選單。
+   強制切換「電腦版」（<html data-view="desktop">）時不套用。 */
 @media (max-width: 900px) {
-  .shell {
+  html:not([data-view="desktop"]) .shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
   }
-
-  .main {
+  html:not([data-view="desktop"]) .main {
     height: auto;
     min-height: 0;
   }
-
-  .sidebar {
+  html:not([data-view="desktop"]) .sidebar {
     flex-direction: row;
     align-items: center;
     padding: 10px 14px;
@@ -2087,102 +2087,84 @@ button.shift-chip:not(.shift-chip--add):hover {
     border-right: none;
     border-bottom: 1px solid #1b1812;
   }
-
-  .sidebar__brand {
+  html:not([data-view="desktop"]) .sidebar__brand {
     border: none;
     padding: 0;
     margin: 0;
   }
-
-  .sidebar__name,
-  .sidebar__sub {
+  html:not([data-view="desktop"]) .sidebar__name,
+  html:not([data-view="desktop"]) .sidebar__sub {
     display: none;
   }
-
-  .sidebar__nav {
+  html:not([data-view="desktop"]) .sidebar__nav {
     flex-direction: row;
     flex: 1;
     gap: 3px;
     overflow-x: auto;
     scrollbar-width: none;
   }
-
-  .sidebar__nav::-webkit-scrollbar {
+  html:not([data-view="desktop"]) .sidebar__nav::-webkit-scrollbar {
     display: none;
   }
-
-  .nav-item {
+  html:not([data-view="desktop"]) .nav-item {
     padding: 8px 10px;
     white-space: nowrap;
     border-left: none;
     border-bottom: 2px solid transparent;
     font-size: calc(12.5px * var(--font-scale));
   }
-
-  .nav-item--active {
+  html:not([data-view="desktop"]) .nav-item--active {
     border-bottom-color: #e07b2f;
   }
-
-  .nav-item__icon {
+  html:not([data-view="desktop"]) .nav-item__icon {
     display: none;
   }
-
-  .sidebar__foot {
+  html:not([data-view="desktop"]) .sidebar__foot {
     border-top: none;
     padding-top: 0;
   }
-
-  .sidebar__userinfo {
+  html:not([data-view="desktop"]) .sidebar__userinfo {
     display: none;
   }
-
-  .topbar {
+  html:not([data-view="desktop"]) .topbar {
     padding: 12px 18px;
   }
-
-  .topbar__logout {
+  html:not([data-view="desktop"]) .topbar__logout {
     display: none;
   }
-
-  .view {
+  html:not([data-view="desktop"]) .view {
     padding: 18px 14px 50px;
   }
-
-  .cal-cell {
+  html:not([data-view="desktop"]) .cal-cell {
     min-height: 96px;
     padding: 5px 6px;
   }
 }
 
-/* 手機（≤640px）：底部固定標籤列 + 月曆改為單欄日期清單 */
+/* 手機（≤640px）：底部固定標籤列 + 月曆改為單欄日期清單。
+   強制切換「電腦版」時不套用。 */
 @media (max-width: 640px) {
-  .shell {
+  html:not([data-view="desktop"]) .shell {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
     height: 100dvh;
   }
-
-  .login-page {
+  html:not([data-view="desktop"]) .login-page {
     height: 100dvh;
     padding: 14px;
   }
-
-  /* 底部標籤列：品牌收掉，選單變成「圖示+文字」的標籤，登出也放這裡 */
-  .sidebar {
+  html:not([data-view="desktop"]) .sidebar {
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
     gap: 4px;
     border-bottom: none;
   }
-
-  .sidebar__brand {
+  html:not([data-view="desktop"]) .sidebar__brand {
     display: none;
   }
-
-  .sidebar__nav {
+  html:not([data-view="desktop"]) .sidebar__nav {
     gap: 2px;
   }
-
-  .nav-item {
+  html:not([data-view="desktop"]) .nav-item {
     flex: 1 1 0;
     min-width: 0;
     flex-direction: column;
@@ -2198,357 +2180,685 @@ button.shift-chip:not(.shift-chip--add):hover {
     text-align: center;
     white-space: normal;
   }
-
-  .nav-item__icon {
+  html:not([data-view="desktop"]) .nav-item__icon {
     display: block;
     width: auto;
     font-size: calc(15px * var(--font-scale));
     line-height: 1;
   }
-
-  .sidebar__foot {
+  html:not([data-view="desktop"]) .sidebar__foot {
     padding: 0;
   }
-
-  .sidebar__user {
+  html:not([data-view="desktop"]) .sidebar__user {
     display: none;
   }
-
-  .sidebar__logout {
+  html:not([data-view="desktop"]) .sidebar__logout {
     align-self: center;
     min-height: 46px;
     padding: 6px 10px;
     font-size: calc(11px * var(--font-scale));
   }
-
-  /* 上方工具列：靠頂，預留瀏覽器安全區 */
-  .topbar {
+  html:not([data-view="desktop"]) .topbar {
     padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
     gap: 8px;
+    flex-wrap: wrap;
+    row-gap: 6px;
   }
-
-  .topbar__title {
+  html:not([data-view="desktop"]) .topbar__title {
     font-size: calc(15px * var(--font-scale));
     letter-spacing: 0;
   }
-
-  .topbar__actions {
+  html:not([data-view="desktop"]) .topbar__actions {
     gap: 5px;
   }
-
-  .topbar__actions .btn--ghost {
+  html:not([data-view="desktop"]) .topbar__actions .btn--ghost {
     padding: 0 9px;
     height: 32px;
     font-size: calc(12px * var(--font-scale));
   }
-
-  .font-size {
+  html:not([data-view="desktop"]) .font-size {
     gap: 3px;
     margin-right: 0;
   }
-
-  .font-size__label {
+  html:not([data-view="desktop"]) .font-size__label {
     display: none;
   }
-
-  .seg__btn {
+  html:not([data-view="desktop"]) .seg__btn {
     padding: 4px 9px;
     font-size: calc(11px * var(--font-scale));
   }
-
-  .view {
+  html:not([data-view="desktop"]) .view-mode .seg__btn {
+    padding: 4px 7px;
+  }
+  html:not([data-view="desktop"]) .view {
     padding: 14px 12px 40px;
   }
-
-  .view__head {
+  html:not([data-view="desktop"]) .view__head {
     gap: 10px;
     margin-bottom: 14px;
   }
-
-  .view__head .field--inline {
+  html:not([data-view="desktop"]) .view__head .field--inline {
     flex: 1 1 100%;
   }
-
-  .view__head .field--inline select {
+  html:not([data-view="desktop"]) .view__head .field--inline select {
     flex: 1;
     width: 100%;
   }
-
-  .view__title {
+  html:not([data-view="desktop"]) .view__title {
     font-size: calc(15.5px * var(--font-scale));
   }
-
-  /* 月份切換：拉大觸控範圍，自動排班按鈕放到下一列 */
-  .monthnav {
+  html:not([data-view="desktop"]) .monthnav {
     width: 100%;
     justify-content: space-between;
     padding: 5px;
   }
-
-  .monthnav__btn {
+  html:not([data-view="desktop"]) .monthnav__btn {
     width: 42px;
     height: 42px;
     font-size: calc(18px * var(--font-scale));
   }
-
-  .monthnav__btn--text {
+  html:not([data-view="desktop"]) .monthnav__btn--text {
     height: 42px;
     padding: 0 12px;
   }
-
-  /* 月曆：從 7 欄改成單欄「日期清單」，每天一整列 */
-  .cal {
+  html:not([data-view="desktop"]) .cal {
     padding: 10px;
     border-radius: 11px;
   }
-
-  .cal__grid {
+  html:not([data-view="desktop"]) .cal__grid {
     grid-template-columns: 1fr;
     gap: 7px;
   }
-
-  .cal-weekhead {
+  html:not([data-view="desktop"]) .cal-weekhead {
     display: none;
   }
-
-  .cal-cell--blank {
+  html:not([data-view="desktop"]) .cal-cell--blank {
     display: none;
   }
-
-  .cal-cell {
+  html:not([data-view="desktop"]) .cal-cell {
     min-height: 0;
     padding: 8px 10px;
     border-radius: 9px;
   }
-
-  .cal-cell__shifts,
-  .cal-cell__half {
+  html:not([data-view="desktop"]) .cal-cell__shifts,
+  html:not([data-view="desktop"]) .cal-cell__half {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 5px;
   }
-
-  .cal-cell__halflabel {
+  html:not([data-view="desktop"]) .cal-cell__halflabel {
     flex-basis: 100%;
     margin-top: 0;
   }
-
-  .shift-chip {
+  html:not([data-view="desktop"]) .shift-chip {
     width: auto;
     flex: 0 1 auto;
     min-height: 30px;
     padding: 4px 10px;
     font-size: calc(12.5px * var(--font-scale));
   }
-
-  .shift-chip--add {
+  html:not([data-view="desktop"]) .shift-chip--add {
     flex: 1 1 auto;
     height: 34px;
   }
-
-  .cal-cell__avail {
+  html:not([data-view="desktop"]) .cal-cell__avail {
     gap: 4px;
   }
-
-  .avail-dot {
+  html:not([data-view="desktop"]) .avail-dot {
     width: 21px;
     height: 21px;
     font-size: calc(10px * var(--font-scale));
   }
-
-  /* 排休頁單人檢視：日期格改為橫式列（左日期・右狀態），更好按 */
-  .avail-cell {
+  html:not([data-view="desktop"]) .avail-cell {
     flex-direction: row;
     align-items: center;
     gap: 10px;
     min-height: 48px;
     padding: 8px 12px;
   }
-
-  .avail-cell__day {
+  html:not([data-view="desktop"]) .avail-cell__day {
     font-size: calc(16px * var(--font-scale));
   }
-
-  .avail-cell__tag {
+  html:not([data-view="desktop"]) .avail-cell__tag {
     margin-left: auto;
     font-size: calc(12px * var(--font-scale));
     padding: 3px 10px;
   }
-
-  .avail-cell__normal {
+  html:not([data-view="desktop"]) .avail-cell__normal {
     font-size: calc(12px * var(--font-scale));
   }
-
-  .avail-overview {
+  html:not([data-view="desktop"]) .avail-overview {
     min-height: 0;
   }
-
-  .filter-bar {
+  html:not([data-view="desktop"]) .filter-bar {
     padding: 9px 11px;
     gap: 7px;
   }
-
-  .check-chip,
-  .emp-chip {
+  html:not([data-view="desktop"]) .check-chip,
+  html:not([data-view="desktop"]) .emp-chip {
     padding: 7px 11px;
     font-size: calc(12.5px * var(--font-scale));
   }
-
-  .legend {
+  html:not([data-view="desktop"]) .legend {
     gap: 7px 12px;
     font-size: calc(11.5px * var(--font-scale));
   }
-
-  .hint {
+  html:not([data-view="desktop"]) .hint {
     font-size: calc(11.5px * var(--font-scale));
   }
-
-  /* 表單／彈窗 */
-  .form-row {
+  html:not([data-view="desktop"]) .form-row {
     grid-template-columns: 1fr;
     gap: 10px;
   }
-
-  .modal-backdrop {
+  html:not([data-view="desktop"]) .modal-backdrop {
     padding: 10px;
   }
-
-  .modal {
-    max-height: 92vh;
+  html:not([data-view="desktop"]) .modal {
+    max-height: min(92vh, calc(100dvh - 20px));
     border-radius: 12px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
-
-  .modal--wide {
+  html:not([data-view="desktop"]) .modal--wide {
     width: 100%;
   }
-
-  .modal__head {
+  html:not([data-view="desktop"]) .modal__head {
     padding: 13px 16px 0;
   }
-
-  .modal__body {
+  html:not([data-view="desktop"]) .modal__body {
     padding: 13px 16px 16px;
   }
-
-  .assign-person {
+  html:not([data-view="desktop"]) .assign-person {
     flex-wrap: wrap;
     padding: 9px 10px;
   }
-
-  .assign-person__name {
+  html:not([data-view="desktop"]) .assign-person__name {
     flex: 1 1 auto;
   }
-
-  .assign-note {
+  html:not([data-view="desktop"]) .assign-note {
     flex-basis: 100%;
     min-height: 34px;
   }
-
-  .assign-add {
+  html:not([data-view="desktop"]) .assign-add {
     flex-direction: column;
     align-items: stretch;
     gap: 7px;
   }
-
-  .assign-add select,
-  .assign-add .btn {
+  html:not([data-view="desktop"]) .assign-add select,
+  html:not([data-view="desktop"]) .assign-add .btn {
     width: 100%;
   }
-
-  .option-item {
+  html:not([data-view="desktop"]) .option-item {
     padding: 13px 12px;
     font-size: calc(14px * var(--font-scale));
   }
-
-  .color-swatch {
+  html:not([data-view="desktop"]) .color-swatch {
     width: 32px;
     height: 32px;
   }
-
-  /* 按鈕觸控範圍加大 */
-  .btn {
+  html:not([data-view="desktop"]) .btn {
     height: 38px;
     font-size: calc(13px * var(--font-scale));
   }
-
-  .btn--small {
+  html:not([data-view="desktop"]) .btn--small {
     height: 32px;
   }
-
-  input[type="text"],
-  input[type="password"],
-  input[type="number"],
-  input[type="time"],
-  input[type="date"],
-  select {
+  html:not([data-view="desktop"]) input[type="text"],
+  html:not([data-view="desktop"]) input[type="password"],
+  html:not([data-view="desktop"]) input[type="number"],
+  html:not([data-view="desktop"]) input[type="time"],
+  html:not([data-view="desktop"]) input[type="date"],
+  html:not([data-view="desktop"]) select {
     height: 40px;
     font-size: 16px;
   }
-
-  textarea.holiday-input {
+  html:not([data-view="desktop"]) textarea.holiday-input {
     min-height: 100px;
   }
-
-  /* 表格：維持可橫向滑動，但縮小內距、輸入框 */
-  .table-card {
+  html:not([data-view="desktop"]) .table-card {
     padding: 4px;
     border-radius: 10px;
     -webkit-overflow-scrolling: touch;
   }
-
-  .table th,
-  .table td {
+  html:not([data-view="desktop"]) .table th,
+  html:not([data-view="desktop"]) .table td {
     padding: 9px 10px;
   }
-
-  .table--hc {
+  html:not([data-view="desktop"]) .table--hc {
     min-width: 320px;
   }
-
-  .num-input {
+  html:not([data-view="desktop"]) .num-input {
     width: 52px;
     height: 34px;
   }
-
-  /* 統計 */
-  .stats__grid {
+  html:not([data-view="desktop"]) .stats__grid {
     grid-template-columns: 1fr;
   }
-
-  .panel {
+  html:not([data-view="desktop"]) .panel {
     padding: 14px 15px;
     border-radius: 11px;
     margin-top: 14px;
   }
-
-  /* 訊息提示改為頂部置中全寬，手機上比較顯眼 */
-  .toast-host {
+  html:not([data-view="desktop"]) .toast-host {
     top: calc(10px + env(safe-area-inset-top, 0px));
     left: 12px;
     right: 12px;
     align-items: center;
   }
-
-  .toast {
+  html:not([data-view="desktop"]) .toast {
     width: 100%;
     max-width: 100%;
     text-align: center;
   }
-
-  .remove-dropzone {
+  html:not([data-view="desktop"]) .remove-dropzone {
     width: calc(100vw - 24px);
     max-width: none;
     justify-content: center;
     text-align: center;
     bottom: calc(78px + env(safe-area-inset-bottom, 0px));
   }
-
-  .paste-bar {
+  html:not([data-view="desktop"]) .paste-bar {
     padding: 9px 12px;
     gap: 8px;
   }
-
-  .login-card {
+  html:not([data-view="desktop"]) .login-card {
     padding: 26px 20px 22px;
   }
 }
+
+/* ---------- 版型切換 ----------
+   Layout.tsx 依 localStorage「view-mode」在 <html> 上設定 data-view：
+   - 自動（未設定）：以上方 media query 依螢幕寬度切換
+   - desktop（data-view="desktop"）：任何寬度都顯示電腦版排版
+   - mobile（data-view="mobile"）：任何寬度都顯示手機版排版
+   強制手機版等同直接套用上方兩組 media query 的內容。 */
+
+/* 強制手機版：平板排版（等同 ≤900px） */
+  html[data-view="mobile"] .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  html[data-view="mobile"] .main {
+    height: auto;
+    min-height: 0;
+  }
+  html[data-view="mobile"] .sidebar {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 14px;
+    gap: 10px;
+    border-right: none;
+    border-bottom: 1px solid #1b1812;
+  }
+  html[data-view="mobile"] .sidebar__brand {
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+  html[data-view="mobile"] .sidebar__name,
+  html[data-view="mobile"] .sidebar__sub {
+    display: none;
+  }
+  html[data-view="mobile"] .sidebar__nav {
+    flex-direction: row;
+    flex: 1;
+    gap: 3px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  html[data-view="mobile"] .sidebar__nav::-webkit-scrollbar {
+    display: none;
+  }
+  html[data-view="mobile"] .nav-item {
+    padding: 8px 10px;
+    white-space: nowrap;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    font-size: calc(12.5px * var(--font-scale));
+  }
+  html[data-view="mobile"] .nav-item--active {
+    border-bottom-color: #e07b2f;
+  }
+  html[data-view="mobile"] .nav-item__icon {
+    display: none;
+  }
+  html[data-view="mobile"] .sidebar__foot {
+    border-top: none;
+    padding-top: 0;
+  }
+  html[data-view="mobile"] .sidebar__userinfo {
+    display: none;
+  }
+  html[data-view="mobile"] .topbar {
+    padding: 12px 18px;
+  }
+  html[data-view="mobile"] .topbar__logout {
+    display: none;
+  }
+  html[data-view="mobile"] .view {
+    padding: 18px 14px 50px;
+  }
+  html[data-view="mobile"] .cal-cell {
+    min-height: 96px;
+    padding: 5px 6px;
+  }
+
+/* 強制手機版：手機排版（等同 ≤640px） */
+  html[data-view="mobile"] .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    height: 100dvh;
+  }
+  html[data-view="mobile"] .login-page {
+    height: 100dvh;
+    padding: 14px;
+  }
+  html[data-view="mobile"] .sidebar {
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    gap: 4px;
+    border-bottom: none;
+  }
+  html[data-view="mobile"] .sidebar__brand {
+    display: none;
+  }
+  html[data-view="mobile"] .sidebar__nav {
+    gap: 2px;
+  }
+  html[data-view="mobile"] .nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 2px;
+    min-height: 46px;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    font-size: calc(10px * var(--font-scale));
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
+  }
+  html[data-view="mobile"] .nav-item__icon {
+    display: block;
+    width: auto;
+    font-size: calc(15px * var(--font-scale));
+    line-height: 1;
+  }
+  html[data-view="mobile"] .sidebar__foot {
+    padding: 0;
+  }
+  html[data-view="mobile"] .sidebar__user {
+    display: none;
+  }
+  html[data-view="mobile"] .sidebar__logout {
+    align-self: center;
+    min-height: 46px;
+    padding: 6px 10px;
+    font-size: calc(11px * var(--font-scale));
+  }
+  html[data-view="mobile"] .topbar {
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
+    gap: 8px;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  html[data-view="mobile"] .topbar__title {
+    font-size: calc(15px * var(--font-scale));
+    letter-spacing: 0;
+  }
+  html[data-view="mobile"] .topbar__actions {
+    gap: 5px;
+  }
+  html[data-view="mobile"] .topbar__actions .btn--ghost {
+    padding: 0 9px;
+    height: 32px;
+    font-size: calc(12px * var(--font-scale));
+  }
+  html[data-view="mobile"] .font-size {
+    gap: 3px;
+    margin-right: 0;
+  }
+  html[data-view="mobile"] .font-size__label {
+    display: none;
+  }
+  html[data-view="mobile"] .seg__btn {
+    padding: 4px 9px;
+    font-size: calc(11px * var(--font-scale));
+  }
+  html[data-view="mobile"] .view-mode .seg__btn {
+    padding: 4px 7px;
+  }
+  html[data-view="mobile"] .view {
+    padding: 14px 12px 40px;
+  }
+  html[data-view="mobile"] .view__head {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  html[data-view="mobile"] .view__head .field--inline {
+    flex: 1 1 100%;
+  }
+  html[data-view="mobile"] .view__head .field--inline select {
+    flex: 1;
+    width: 100%;
+  }
+  html[data-view="mobile"] .view__title {
+    font-size: calc(15.5px * var(--font-scale));
+  }
+  html[data-view="mobile"] .monthnav {
+    width: 100%;
+    justify-content: space-between;
+    padding: 5px;
+  }
+  html[data-view="mobile"] .monthnav__btn {
+    width: 42px;
+    height: 42px;
+    font-size: calc(18px * var(--font-scale));
+  }
+  html[data-view="mobile"] .monthnav__btn--text {
+    height: 42px;
+    padding: 0 12px;
+  }
+  html[data-view="mobile"] .cal {
+    padding: 10px;
+    border-radius: 11px;
+  }
+  html[data-view="mobile"] .cal__grid {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+  html[data-view="mobile"] .cal-weekhead {
+    display: none;
+  }
+  html[data-view="mobile"] .cal-cell--blank {
+    display: none;
+  }
+  html[data-view="mobile"] .cal-cell {
+    min-height: 0;
+    padding: 8px 10px;
+    border-radius: 9px;
+  }
+  html[data-view="mobile"] .cal-cell__shifts,
+  html[data-view="mobile"] .cal-cell__half {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  html[data-view="mobile"] .cal-cell__halflabel {
+    flex-basis: 100%;
+    margin-top: 0;
+  }
+  html[data-view="mobile"] .shift-chip {
+    width: auto;
+    flex: 0 1 auto;
+    min-height: 30px;
+    padding: 4px 10px;
+    font-size: calc(12.5px * var(--font-scale));
+  }
+  html[data-view="mobile"] .shift-chip--add {
+    flex: 1 1 auto;
+    height: 34px;
+  }
+  html[data-view="mobile"] .cal-cell__avail {
+    gap: 4px;
+  }
+  html[data-view="mobile"] .avail-dot {
+    width: 21px;
+    height: 21px;
+    font-size: calc(10px * var(--font-scale));
+  }
+  html[data-view="mobile"] .avail-cell {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 8px 12px;
+  }
+  html[data-view="mobile"] .avail-cell__day {
+    font-size: calc(16px * var(--font-scale));
+  }
+  html[data-view="mobile"] .avail-cell__tag {
+    margin-left: auto;
+    font-size: calc(12px * var(--font-scale));
+    padding: 3px 10px;
+  }
+  html[data-view="mobile"] .avail-cell__normal {
+    font-size: calc(12px * var(--font-scale));
+  }
+  html[data-view="mobile"] .avail-overview {
+    min-height: 0;
+  }
+  html[data-view="mobile"] .filter-bar {
+    padding: 9px 11px;
+    gap: 7px;
+  }
+  html[data-view="mobile"] .check-chip,
+  html[data-view="mobile"] .emp-chip {
+    padding: 7px 11px;
+    font-size: calc(12.5px * var(--font-scale));
+  }
+  html[data-view="mobile"] .legend {
+    gap: 7px 12px;
+    font-size: calc(11.5px * var(--font-scale));
+  }
+  html[data-view="mobile"] .hint {
+    font-size: calc(11.5px * var(--font-scale));
+  }
+  html[data-view="mobile"] .form-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  html[data-view="mobile"] .modal-backdrop {
+    padding: 10px;
+  }
+  html[data-view="mobile"] .modal {
+    max-height: min(92vh, calc(100dvh - 20px));
+    border-radius: 12px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  html[data-view="mobile"] .modal--wide {
+    width: 100%;
+  }
+  html[data-view="mobile"] .modal__head {
+    padding: 13px 16px 0;
+  }
+  html[data-view="mobile"] .modal__body {
+    padding: 13px 16px 16px;
+  }
+  html[data-view="mobile"] .assign-person {
+    flex-wrap: wrap;
+    padding: 9px 10px;
+  }
+  html[data-view="mobile"] .assign-person__name {
+    flex: 1 1 auto;
+  }
+  html[data-view="mobile"] .assign-note {
+    flex-basis: 100%;
+    min-height: 34px;
+  }
+  html[data-view="mobile"] .assign-add {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
+  }
+  html[data-view="mobile"] .assign-add select,
+  html[data-view="mobile"] .assign-add .btn {
+    width: 100%;
+  }
+  html[data-view="mobile"] .option-item {
+    padding: 13px 12px;
+    font-size: calc(14px * var(--font-scale));
+  }
+  html[data-view="mobile"] .color-swatch {
+    width: 32px;
+    height: 32px;
+  }
+  html[data-view="mobile"] .btn {
+    height: 38px;
+    font-size: calc(13px * var(--font-scale));
+  }
+  html[data-view="mobile"] .btn--small {
+    height: 32px;
+  }
+  html[data-view="mobile"] input[type="text"],
+  html[data-view="mobile"] input[type="password"],
+  html[data-view="mobile"] input[type="number"],
+  html[data-view="mobile"] input[type="time"],
+  html[data-view="mobile"] input[type="date"],
+  html[data-view="mobile"] select {
+    height: 40px;
+    font-size: 16px;
+  }
+  html[data-view="mobile"] textarea.holiday-input {
+    min-height: 100px;
+  }
+  html[data-view="mobile"] .table-card {
+    padding: 4px;
+    border-radius: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  html[data-view="mobile"] .table th,
+  html[data-view="mobile"] .table td {
+    padding: 9px 10px;
+  }
+  html[data-view="mobile"] .table--hc {
+    min-width: 320px;
+  }
+  html[data-view="mobile"] .num-input {
+    width: 52px;
+    height: 34px;
+  }
+  html[data-view="mobile"] .stats__grid {
+    grid-template-columns: 1fr;
+  }
+  html[data-view="mobile"] .panel {
+    padding: 14px 15px;
+    border-radius: 11px;
+    margin-top: 14px;
+  }
+  html[data-view="mobile"] .toast-host {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 12px;
+    right: 12px;
+    align-items: center;
+  }
+  html[data-view="mobile"] .toast {
+    width: 100%;
+    max-width: 100%;
+    text-align: center;
+  }
+  html[data-view="mobile"] .remove-dropzone {
+    width: calc(100vw - 24px);
+    max-width: none;
+    justify-content: center;
+    text-align: center;
+    bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+  }
+  html[data-view="mobile"] .paste-bar {
+    padding: 9px 12px;
+    gap: 8px;
+  }
+  html[data-view="mobile"] .login-card {
+    padding: 26px 20px 22px;
+  }

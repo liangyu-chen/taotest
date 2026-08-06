@@ -1,6 +1,6 @@
 import { NavLink, useLocation, Navigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../auth'
 import { useChangePassword } from './ui'
 
@@ -16,6 +16,14 @@ const FONT_SIZES: { key: string; label: string; scale: number }[] = [
   { key: 'small', label: '小', scale: 0.9 },
   { key: 'medium', label: '中', scale: 1 },
   { key: 'large', label: '大', scale: 1.15 },
+]
+
+// 版型：自動（依螢幕寬度）／強制電腦版／強制手機版。
+// 記錄在 localStorage（key: view-mode），並在 <html> 上設 data-view 供 CSS 判斷。
+const VIEW_MODES: { key: string; label: string }[] = [
+  { key: 'auto', label: '自動' },
+  { key: 'desktop', label: '電腦版' },
+  { key: 'mobile', label: '手機版' },
 ]
 
 // 上方標題列依目前網址顯示的標題
@@ -47,6 +55,23 @@ export default function Layout({ children }: { children: ReactNode }) {
     document.documentElement.style.setProperty('--font-scale', String(target.scale))
     localStorage.setItem('font-scale', key)
   }
+
+  // 版型：初始值從 localStorage 讀取，沒有就用「自動」；套用到 <html> 的 data-view
+  const [viewMode, setViewMode] = useState<string>(() => {
+    const saved = localStorage.getItem('view-mode')
+    const key = VIEW_MODES.some((v) => v.key === saved) ? (saved as string) : 'auto'
+    const root = document.documentElement
+    if (key === 'auto') root.removeAttribute('data-view')
+    else root.setAttribute('data-view', key)
+    return key
+  })
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (viewMode === 'auto') root.removeAttribute('data-view')
+    else root.setAttribute('data-view', viewMode)
+    localStorage.setItem('view-mode', viewMode)
+  }, [viewMode])
 
   // 左側選單項目；管理功能只有管理員看得到
   const items = [
@@ -103,6 +128,21 @@ export default function Layout({ children }: { children: ReactNode }) {
         <header className="topbar">
           <h2 className="topbar__title">{TITLES[location.pathname] || '排班管理系統'}</h2>
           <div className="topbar__actions">
+            <div className="font-size view-mode">
+              <span className="font-size__label">版型</span>
+              <div className="seg">
+                {VIEW_MODES.map((v) => (
+                  <button
+                    key={v.key}
+                    type="button"
+                    className={`seg__btn${viewMode === v.key ? ' seg__btn--on' : ''}`}
+                    onClick={() => setViewMode(v.key)}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="font-size">
               <span className="font-size__label">字體</span>
               <div className="seg">

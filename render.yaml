@@ -4,7 +4,7 @@
 # 「Environment」區即可（JWT_SECRET 會自動產生）。
 services:
   - type: web
-    name: nint-schedule
+    name: taotest
     runtime: node
     plan: free
     buildCommand: npm install --include=dev && npm run build
