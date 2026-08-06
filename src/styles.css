@@ -2173,28 +2173,21 @@ button.shift-chip:not(.shift-chip--add):hover {
   }
 }
 
-/* 手機（≤640px）：底部固定標籤列 + 月曆改為單欄日期清單。
+/* 手機（≤640px）：導覽列固定在最上方 + 月曆改為單欄日期清單。
    強制切換「電腦版」時不套用。 */
 @media (max-width: 640px) {
   html:not([data-view="desktop"]) .shell {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: auto 1fr;
     height: 100dvh;
-  }
-  html:not([data-view="desktop"]) .main {
-    grid-row: 1;
-  }
-  html:not([data-view="desktop"]) .sidebar {
-    grid-row: 2;
   }
   html:not([data-view="desktop"]) .login-page {
     height: 100dvh;
     padding: 14px;
   }
   html:not([data-view="desktop"]) .sidebar {
-    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
     gap: 4px;
-    border-bottom: none;
   }
   html:not([data-view="desktop"]) .sidebar__brand {
     display: none;
@@ -2587,23 +2580,16 @@ button.shift-chip:not(.shift-chip--add):hover {
 /* 強制手機版：手機排版（等同 ≤640px） */
   html[data-view="mobile"] .shell {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: auto 1fr;
     height: 100dvh;
-  }
-  html[data-view="mobile"] .main {
-    grid-row: 1;
-  }
-  html[data-view="mobile"] .sidebar {
-    grid-row: 2;
   }
   html[data-view="mobile"] .login-page {
     height: 100dvh;
     padding: 14px;
   }
   html[data-view="mobile"] .sidebar {
-    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
     gap: 4px;
-    border-bottom: none;
   }
   html[data-view="mobile"] .sidebar__brand {
     display: none;
