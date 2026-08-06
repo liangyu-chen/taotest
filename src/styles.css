@@ -462,6 +462,18 @@ select {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
+/* iOS Safari 的 date/time 輸入內建時鐘/日曆圖示會強制最小寬度並無視 width:100%，
+   此處移除原生外觀讓欄位可正常縮放（點擊仍會開啟系統選取器）；所有版型一體適用。 */
+input[type="time"],
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
 input:focus,
 select:focus {
   border-color: var(--accent);
@@ -2460,15 +2472,6 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) textarea.holiday-input {
     min-height: 100px;
   }
-  html:not([data-view="desktop"]) input[type="time"],
-  html:not([data-view="desktop"]) input[type="date"] {
-    -webkit-appearance: none;
-    appearance: none;
-    min-width: 0;
-    max-width: 100%;
-    width: 100%;
-    overflow: hidden;
-  }
   html:not([data-view="desktop"]) .table-card {
     padding: 4px;
     border-radius: 10px;
@@ -2897,15 +2900,6 @@ button.shift-chip:not(.shift-chip--add):hover {
   }
   html[data-view="mobile"] textarea.holiday-input {
     min-height: 100px;
-  }
-  html[data-view="mobile"] input[type="time"],
-  html[data-view="mobile"] input[type="date"] {
-    -webkit-appearance: none;
-    appearance: none;
-    min-width: 0;
-    max-width: 100%;
-    width: 100%;
-    overflow: hidden;
   }
   html[data-view="mobile"] .table-card {
     padding: 4px;
