@@ -2181,6 +2181,12 @@ button.shift-chip:not(.shift-chip--add):hover {
     grid-template-rows: 1fr auto;
     height: 100dvh;
   }
+  html:not([data-view="desktop"]) .main {
+    grid-row: 1;
+  }
+  html:not([data-view="desktop"]) .sidebar {
+    grid-row: 2;
+  }
   html:not([data-view="desktop"]) .login-page {
     height: 100dvh;
     padding: 14px;
@@ -2583,6 +2589,12 @@ button.shift-chip:not(.shift-chip--add):hover {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
     height: 100dvh;
+  }
+  html[data-view="mobile"] .main {
+    grid-row: 1;
+  }
+  html[data-view="mobile"] .sidebar {
+    grid-row: 2;
   }
   html[data-view="mobile"] .login-page {
     height: 100dvh;
