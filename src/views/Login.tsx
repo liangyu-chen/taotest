@@ -10,8 +10,8 @@ import { useAuth } from '../auth'
 
 export default function Login() {
   const { login, user } = useAuth()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('admin')
+  const [password, setPassword] = useState('admin123')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -43,7 +43,7 @@ export default function Login() {
       <div className="login-card">
         <div className="login-brand">
           <span className="login-brand__mark">班</span>
-          <h1 className="login-brand__name">排班排程系統</h1>
+          <h1 className="login-brand__name">排班管理系統</h1>
           <p className="login-brand__sub">自動排班 · 人力管理 · Google 試算表</p>
         </div>
         <form className="login-form" onSubmit={handleSubmit}>
@@ -54,7 +54,6 @@ export default function Login() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
-              autoFocus
             />
           </label>
           <label className="field">

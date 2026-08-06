@@ -69,7 +69,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="sidebar__brand">
           <span className="sidebar__mark">班</span>
           <div>
-            <div className="sidebar__name">排班排程</div>
+            <div className="sidebar__name">排班管理</div>
             <div className="sidebar__sub">ShiftPlanner</div>
           </div>
         </div>
@@ -101,7 +101,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
       <div className="main">
         <header className="topbar">
-          <h2 className="topbar__title">{TITLES[location.pathname] || '排班排程系統'}</h2>
+          <h2 className="topbar__title">{TITLES[location.pathname] || '排班管理系統'}</h2>
           <div className="topbar__actions">
             <div className="font-size">
               <span className="font-size__label">字體</span>

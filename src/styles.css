@@ -466,6 +466,16 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(31, 110, 94, 0.15);
 }
 
+/* 讓瀏覽器「自動填入」時不要塗上預設的淺藍/淺黃底色，維持跟一般輸入框一致的外觀 */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--panel) inset;
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
