@@ -292,6 +292,7 @@ code,
   border: none;
   padding: 4px 12px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .seg__btn + .seg__btn {
@@ -2956,8 +2957,11 @@ html[data-view="desktop"] .view__head {
     display: inline-flex;
   }
 
-  /* 抽屜模式下 topbar 也壓成單行：標題收縮、動作區可橫向滑動 */
+  /* 抽屜模式下 topbar 改兩行：第一行 ☰＋標題，第二行整排放控制項。
+     避免單行塞不下（標題被擠扁、修改密碼/登出被畫面切掉、按鈕文字換行長高） */
   html[data-view="desktop"] .topbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
     padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
     gap: 8px;
   }
@@ -2968,15 +2972,42 @@ html[data-view="desktop"] .view__head {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: calc(15px * var(--font-scale));
+    letter-spacing: 0;
   }
 
   html[data-view="desktop"] .topbar__actions {
-    overflow-x: auto;
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  /* 動作區內部項目保持原始大小，不要被壓縮導致文字換行 */
+  html[data-view="desktop"] .topbar__actions > * {
     flex: none;
+  }
+
+  html[data-view="desktop"] .topbar__actions .btn--ghost {
+    padding: 0 10px;
+    height: 32px;
+    font-size: calc(12px * var(--font-scale));
+  }
+
+  html[data-view="desktop"] .font-size {
+    gap: 4px;
+    margin-right: 0;
+  }
+
+  html[data-view="desktop"] .font-size__label {
+    display: none;
   }
 
   html[data-view="desktop"] .seg__btn {
     padding: 4px 6px;
     font-size: calc(11px * var(--font-scale));
+  }
+
+  html[data-view="desktop"] .view-mode .seg__btn {
+    padding: 4px 5px;
   }
 }
