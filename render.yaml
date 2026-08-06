@@ -1,0 +1,25 @@
+# Render Blueprint：一鍵部署「排班排程系統」
+# 使用方式：Render 儀表板 → New → Blueprint → 選這個 GitHub repo，
+# 系統會自動依本檔建立服務，再把 GOOGLE_* 與 ADMIN_PASSWORD 的值填進
+# 「Environment」區即可（JWT_SECRET 會自動產生）。
+services:
+  - type: web
+    name: nint-schedule
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: JWT_SECRET
+        generateValue: true
+      # 以下三個值請在 Render 的 Environment 頁面手動填入（sync: false 表示部署時會提示你補）
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: GOOGLE_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false

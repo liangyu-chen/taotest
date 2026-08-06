@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { google } from 'googleapis'
 import bcrypt from 'bcryptjs'
-import { SPREADSHEET_ID, GOOGLE_CREDENTIALS_FILE, DEFAULT_ADMIN } from './config.js'
+import { SPREADSHEET_ID, GOOGLE_CREDENTIALS_FILE, GOOGLE_SERVICE_ACCOUNT_JSON, DEFAULT_ADMIN } from './config.js'
 
 export const TABLES = {
   users: ['id', 'username', 'password_hash', 'display_name', 'role', 'employee_id', 'created_at'],
@@ -51,14 +51,20 @@ function withLock(fn) {
 
 export function getSheets() {
   if (sheetsClient) return sheetsClient
-  const credsPath = path.resolve(process.cwd(), GOOGLE_CREDENTIALS_FILE)
-  if (!fs.existsSync(credsPath)) {
-    throw new Error(
-      `找不到 Google 服務帳號憑證：${credsPath}\n` +
-        '請依照 README「Google 試算表設定」建立服務帳號並下載 JSON 憑證檔放到專案根目錄。',
-    )
+  let creds
+  if (GOOGLE_SERVICE_ACCOUNT_JSON && GOOGLE_SERVICE_ACCOUNT_JSON.trim()) {
+    creds = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON)
+  } else {
+    const credsPath = path.resolve(process.cwd(), GOOGLE_CREDENTIALS_FILE)
+    if (!fs.existsSync(credsPath)) {
+      throw new Error(
+        `找不到 Google 服務帳號憑證：${credsPath}\n` +
+          '請依照 README「Google 試算表設定」建立服務帳號並下載 JSON 憑證檔放到專案根目錄，' +
+          '或在雲端部署時設定 GOOGLE_SERVICE_ACCOUNT_JSON 環境變數放入整份憑證 JSON。',
+      )
+    }
+    creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'))
   }
-  const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'))
   const auth = new google.auth.JWT({
     email: creds.client_email,
     key: creds.private_key,
