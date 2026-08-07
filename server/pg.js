@@ -44,22 +44,26 @@ function quoteCol(c) {
 }
 
 export async function ensureTabs(names) {
+  // 全部 DDL 併成一筆查詢（簡單協定支援多敘述），
+  // 把 60~70 次網路往返縮成 1 次，大幅加快 Vercel 冷啟動的 initDatabase。
   const client = await getPool().connect()
   try {
+    const stmts = []
     for (const name of names) {
       const cols = TABLES[name]
       if (!cols) continue
       const colsSql = cols.map((c) => `${quoteCol(c)} text`).join(', ')
-      await client.query(`CREATE TABLE IF NOT EXISTS ${quoteCol(name)} (${colsSql})`)
+      stmts.push(`CREATE TABLE IF NOT EXISTS ${quoteCol(name)} (${colsSql})`)
       // 既有表缺欄位時補上（例如 schedule 新增 work_item）——遷移用
       for (const c of cols) {
-        await client.query(`ALTER TABLE ${quoteCol(name)} ADD COLUMN IF NOT EXISTS ${quoteCol(c)} text`)
+        stmts.push(`ALTER TABLE ${quoteCol(name)} ADD COLUMN IF NOT EXISTS ${quoteCol(c)} text`)
       }
     }
     // 唯一索引：防止同一天同一班別同一員工出現重複排班（也加速鎖定/指派查詢）
-    await client.query(
+    stmts.push(
       `CREATE UNIQUE INDEX IF NOT EXISTS ux_schedule_key ON "schedule" (year, month, day, shift_code, employee_id)`,
     )
+    await client.query(stmts.join(';\n'))
   } finally {
     client.release()
   }

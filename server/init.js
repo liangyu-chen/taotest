@@ -9,6 +9,9 @@ import { TABLES, EMPLOYEE_COLORS, DEFAULT_SETTINGS, nextId } from './schema.js'
 import { DEFAULT_ADMIN } from './config.js'
 import { distributeWorkItems } from './scheduler.js'
 
+// schema 版本：任何「建表/遷移/種子」邏輯有改動時請 +1，冷啟動才會重新執行初始化
+const SCHEMA_VERSION = '1'
+
 function readHeader(rows) {
   if (rows.length === 0) return []
   return rows[0].map((c) => String(c ?? '').trim())
@@ -214,7 +217,12 @@ export function createInitializer(db) {
   }
 
   return async function initDatabase() {
+    // 建表永遠執行（單筆查詢，很快），其餘遷移/種子只在 schema 版本變更時跑
     await ensureTabs(Object.keys(TABLES))
+
+    const settings = await readTable('settings')
+    const version = settings.find((s) => s.key === 'schema_version')?.value
+    if (version === SCHEMA_VERSION) return
 
     await migrateEmployees()
     await seedEmployeeColors()
@@ -246,6 +254,14 @@ export function createInitializer(db) {
       await appendRows('users', [
         [String(nextId(users)), DEFAULT_ADMIN.username, hash, '系統管理員', 'admin', '', new Date().toISOString()],
       ])
+    }
+
+    // 初始化完成，寫入版本號（下次冷啟動直接略過）
+    const settingsAfter = await readTable('settings')
+    if (settingsAfter.some((s) => s.key === 'schema_version')) {
+      await updateWhere('settings', { key: 'schema_version' }, { value: SCHEMA_VERSION })
+    } else {
+      await appendRows('settings', [['schema_version', SCHEMA_VERSION, '資料庫 schema 版本，遷移用']])
     }
   }
 }
