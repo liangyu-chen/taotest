@@ -38,6 +38,7 @@ function settingsMap(settings) {
  * - 正職目標＝平日天數×每班時數；工讀無每週時數上限，目標＝每班時數×當月天數
  * - 依各員工「目標時數」比例分配，公平且尊重排休 / 可空出與沒空時段 / 連續上班上限
  * - 有「偏好班別」的員工在該日優先排入偏好班別（在公平分配之前先處理）
+ * - 平日早班優先排「雙技能」員工；其餘班別（平日晚上／假日）隨機挑人
  * - 工作項目（吧台/內場…）：每個有需求人數的班別都要「每個工作項目至少一人負責」，
  *   選人時優先挑具備尚未被覆蓋技能的人；單人班別會優先找能同時勝任所有工作項目的人
  *
@@ -70,6 +71,17 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
   const workShifts = shiftTypes
     .filter((s) => s.code && s.code !== 'OFF')
     .sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0))
+
+  // 早班＝開始時間最早的班別（例如 12:00 的 M 班）；用於「平日早班優先排雙技能者」
+  const morningShiftCode = (() => {
+    const withTime = workShifts.filter((s) => toMin(s.start_time) !== null)
+    if (withTime.length === 0) return workShifts[0]?.code || ''
+    return withTime.reduce((a, b) => (toMin(a.start_time) < toMin(b.start_time) ? a : b)).code
+  })()
+
+  function isWeekdayMorningShift(dayNum, shiftCode) {
+    return dayType(dayNum) === 'weekday' && shiftCode === morningShiftCode
+  }
 
   const headcountMap = {}
   for (const h of headcounts) {
@@ -184,6 +196,13 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     return consecutiveDaysBefore(empId, dayNum) >= maxConsecutive
   }
 
+  function hasAllSkills(empId) {
+    if (workItemIds.length === 0) return false
+    const sks = skillsByEmp.get(String(empId))
+    if (!sks || sks.size === 0) return false
+    return workItemIds.every((id) => sks.has(id))
+  }
+
   function score(empId, shiftCode, dayNum, index, uncovered) {
     let s = 0
     s += (hoursDone[empId] / Math.max(1, targetHours[empId])) * 1000
@@ -191,6 +210,8 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     const streak = consecutiveDaysBefore(empId, dayNum)
     s += streak * streak * 25
     if (preferMap[`${empId}:${dateKey(year, month, dayNum)}`] === shiftCode) s -= 500
+    // 平日（一～五）早班：雙技能（會所有工作項目）者優先
+    if (isWeekdayMorningShift(dayNum, shiftCode) && hasAllSkills(empId)) s -= 300
     // 具備「尚未被覆蓋的工作項目」技能者優先（讓每班吧台/內場都有人負責）
     if (uncovered && uncovered.size) {
       const sks = skillsByEmp.get(String(empId))
@@ -200,6 +221,9 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         if (hits > 0) s -= 200 * hits
       }
     }
+    // 非「平日早班」的班別（平日晚上、假日）加入隨機值，讓排班每次略有不同；
+    // 仍保留技能覆蓋的 pool 篩選，所以吧台/內場各有人負責的規則不受影響
+    if (!isWeekdayMorningShift(dayNum, shiftCode)) s += Math.random() * 250
     s += index * 0.001
     return s
   }
