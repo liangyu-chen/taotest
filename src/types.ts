@@ -16,17 +16,18 @@ export interface User {
 
 export type EmployeeType = 'fulltime' | 'parttime'
 
-// 員工：color 是該員工在班表上的代表色（後端啟動時會自動補色）
+// 員工：color 是該員工在班表上的代表色（後端啟動時會自動補色）；
+// skills 是該員工的工作技能（一對多，可同時會 吧台、內場 等多個工作項目）
 export interface Employee {
   id: string
   name: string
   employee_no: string
-  department: string
   employee_type: EmployeeType
   shift_hours: string
   weekly_hours: string
   color: string
   active: string
+  skills: { id: string; name: string; icon: string }[]
   created_at: string
 }
 
@@ -92,6 +93,19 @@ export interface ShiftType {
   created_at: string
 }
 
+// 工作項目：例如「吧台」「內場」；icon 是顯示用的 emoji/符號；
+// 員工可透過「工作技能」關聯到多個工作項目
+export interface WorkItem {
+  id: string
+  name: string
+  icon: string
+  sort: string
+  created_at: string
+}
+
+// 工作項目可選的圖示（工作項目頁彈窗挑選）
+export const WORK_ITEM_ICONS = ['🍸', '🍺', '🍳', '👨‍🍳', '🍽️', '☕', '🥤', '🍜', '🥗', '🧀', '🍰', '🎂']
+
 // 把後端回傳的設定陣列轉成「以 key 查詢」的物件，方便直接用 settings.xxx 讀取
 export function settingsToMap(settings: Setting[]): SettingsMap {
   const map: Record<string, string> = {}
@@ -144,7 +158,8 @@ export interface Availability {
   end_time?: string
 }
 
-// 已排的班：某人某天被排到某個班別（note 是該班的備註）
+// 已排的班：某人某天被排到某個班別（note 是該班的備註）。
+// work_item 是該員工當日負責的工作項目 id，多個以逗號分隔（如 "1,2" ＝ 吧台＋內場）
 export interface Assignment {
   year: number
   month: number
@@ -152,6 +167,7 @@ export interface Assignment {
   shift_code: string
   employee_id: string
   note?: string
+  work_item?: string
 }
 
 // 自動排班結果的統計資料（顯示在「本月人力彙總」）
@@ -170,10 +186,10 @@ export interface GenerateSummary {
   }[]
 }
 
-// 自動排班的整體結果：排好的班、無法填滿的時段、統計
+// 自動排班的整體結果：排好的班、無法填滿的時段（可能因人力或工作項目未被滿足）、統計
 export interface GenerateResult {
   assignments: Assignment[]
-  unfilled: { day: number; shift_code: string }[]
+  unfilled: { day: number; shift_code: string; work_item?: string }[]
   summary: GenerateSummary
 }
 

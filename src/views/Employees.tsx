@@ -1,34 +1,37 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
-import type { Employee, User } from '../types'
+import type { Employee, User, WorkItem } from '../types'
 import { EMPLOYEE_COLORS } from '../types'
 import { Modal, Field, Spinner, toast } from '../components/ui'
 
 // =============================================================
 // Employees.tsx —— 員工管理（管理員）
 // 員工名單表格 + 三個彈窗：
-//   新增/編輯員工（含代表色挑選，每人顏色須不同）、
+//   新增/編輯員工（含代表色挑選，每人顏色須不同；工作技能可複選）、
 //   為員工建立登入帳號。
 // =============================================================
 
 export default function Employees() {
   const [rows, setRows] = useState<Employee[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [workItems, setWorkItems] = useState<WorkItem[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Employee | null>(null) // 正在編輯的員工（null = 沒開）
   const [creating, setCreating] = useState(false)               // 是否開「新增員工」
   const [accountFor, setAccountFor] = useState<Employee | null>(null) // 正在建帳號的員工
 
-  // 抓員工 + 帳號兩份資料（判斷哪些員工已有登入帳號）
+  // 抓員工 + 帳號 + 工作項目三份資料（工作項目供「工作技能」選取用）
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [e, u] = await Promise.all([
+      const [e, u, w] = await Promise.all([
         api<{ employees: Employee[] }>('/employees'),
         api<{ users: User[] }>('/users'),
+        api<{ workItems: WorkItem[] }>('/work-items'),
       ])
       setRows(e.employees)
       setUsers(u.users)
+      setWorkItems(w.workItems)
     } catch (err) {
       toast((err as Error).message, 'error')
     } finally {
@@ -74,7 +77,7 @@ export default function Employees() {
               <tr>
                 <th>姓名</th>
                 <th>員工編號</th>
-                <th>部門</th>
+                <th>工作技能</th>
                 <th>類型</th>
                 <th>每班時數</th>
                 <th>登入帳號</th>
@@ -92,7 +95,20 @@ export default function Employees() {
                       {row.name}
                     </td>
                     <td>{row.employee_no || '—'}</td>
-                    <td>{row.department || '—'}</td>
+                    <td>
+                      {row.skills?.length > 0 ? (
+                        <span className="skills-cell">
+                          {row.skills.map((s) => (
+                            <span key={s.id} className="badge badge--on">
+                              {s.icon && <span className="wi-icon">{s.icon}</span>}
+                              {s.name}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>
                       <span className={`badge${row.employee_type === 'fulltime' ? ' badge--admin' : ' badge--on'}`}>
                         {row.employee_type === 'fulltime' ? '正職' : '工讀'}
@@ -132,6 +148,7 @@ export default function Employees() {
       {(creating || editing) && (
         <EmployeeModal
           employee={editing}
+          workItems={workItems}
           takenColors={rows.filter((r) => r.id !== editing?.id).map((r) => r.color).filter(Boolean)}
           onClose={() => {
             setCreating(false)
@@ -227,20 +244,23 @@ function AccountModal({
 // 新增/編輯員工彈窗。takenColors 是其他員工已使用的顏色（會被停用，避免撞色）
 function EmployeeModal({
   employee,
+  workItems,
   takenColors,
   onClose,
   onSaved,
 }: {
   employee: Employee | null
+  workItems: WorkItem[]
   takenColors: string[]
   onClose: () => void
   onSaved: () => void
 }) {
   const [name, setName] = useState(employee?.name || '')
   const [no, setNo] = useState(employee?.employee_no || '')
-  const [dept, setDept] = useState(employee?.department || '')
   const [empType, setEmpType] = useState<'fulltime' | 'parttime'>(employee?.employee_type || 'parttime')
   const [shiftHours, setShiftHours] = useState(employee?.shift_hours || '')
+  // 工作技能：可複選（一個員工可同時具備 吧台、內場 等多個工作項目）；必填
+  const [skills, setSkills] = useState<string[]>(employee?.skills?.map((s) => s.id) || [])
   // 代表色：編輯時沿用原色；新增時自動挑一個還沒被用的顏色
   const [color, setColor] = useState(
     employee?.color || EMPLOYEE_COLORS.find((c) => !takenColors.includes(c)) || '',
@@ -262,17 +282,22 @@ function EmployeeModal({
       setError('此顏色已被其他員工使用，每位員工需有不同顏色')
       return
     }
+    // 工作技能必填
+    if (!skills.length) {
+      setError('請至少選擇一項工作技能')
+      return
+    }
     setBusy(true)
     setError('')
     try {
       const body = {
         name: name.trim(),
         employee_no: no.trim(),
-        department: dept.trim(),
         employee_type: empType,
         shift_hours: shiftHours.trim(),
         color,
         active,
+        skills,
       }
       if (employee) {
         await api(`/employees/${employee.id}`, { method: 'PUT', body })
@@ -293,14 +318,37 @@ function EmployeeModal({
         <Field label="姓名 *">
           <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </Field>
-        <div className="form-row">
-          <Field label="員工編號">
-            <input value={no} onChange={(e) => setNo(e.target.value)} />
-          </Field>
-          <Field label="部門">
-            <input value={dept} onChange={(e) => setDept(e.target.value)} />
-          </Field>
-        </div>
+        <Field label="員工編號">
+          <input value={no} onChange={(e) => setNo(e.target.value)} />
+        </Field>
+        <Field label="工作技能 *（必填）">
+          {workItems.length === 0 ? (
+            <p className="form-hint">尚未有工作項目，請先到「工作項目」頁新增。</p>
+          ) : (
+            <div className="skill-grid">
+              {workItems.map((w) => {
+                const on = skills.includes(w.id)
+                return (
+                  <label key={w.id} className={`skill-chip${on ? ' skill-chip--on' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={(e) =>
+                        setSkills((prev) =>
+                          e.target.checked ? [...prev, w.id] : prev.filter((id) => id !== w.id),
+                        )
+                      }
+                    />
+                    <span>
+                      {w.icon && <span className="wi-icon">{w.icon}</span>}
+                      {w.name}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+        </Field>
         <Field label="人員類型">
           <select value={empType} onChange={(e) => setEmpType(e.target.value as 'fulltime' | 'parttime')}>
             <option value="fulltime">正職（每班固定時數）</option>

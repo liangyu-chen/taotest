@@ -206,7 +206,6 @@ function UserModal({
             {employees.map((e) => (
               <option key={e.id} value={e.id}>
                 {e.name}
-                {e.department && `（${e.department}）`}
               </option>
             ))}
           </select>

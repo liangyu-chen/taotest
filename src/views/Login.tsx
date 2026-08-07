@@ -44,7 +44,7 @@ export default function Login() {
         <div className="login-brand">
           <span className="login-brand__mark">班</span>
           <h1 className="login-brand__name">排班管理系統</h1>
-          <p className="login-brand__sub">自動排班 · 人力管理 · Google 試算表</p>
+          <p className="login-brand__sub">自動排班 · 人力管理 · 雲端資料庫</p>
         </div>
         <form className="login-form" onSubmit={handleSubmit}>
           <label className="field">

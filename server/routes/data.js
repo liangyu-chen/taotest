@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
-import { readTable, replaceRows, appendRows, nextId, TABLES, EMPLOYEE_COLORS } from '../sheets.js'
+import { readTable, replaceRows, appendRows, nextId, TABLES, EMPLOYEE_COLORS } from '../storage.js'
 import { requireAuth, requireAdmin, toPublicUser } from '../auth.js'
 
 const router = Router()
@@ -92,15 +92,62 @@ router.delete('/users/:id', requireAuth, requireAdmin, async (req, res, next) =>
 
 router.get('/employees', requireAuth, async (_req, res, next) => {
   try {
-    res.json({ employees: await readTable('employees') })
+    const [employees, skillRows, workItems] = await Promise.all([
+      readTable('employees'),
+      readTable('employee_skills'),
+      readTable('work_items'),
+    ])
+    const itemById = Object.fromEntries(workItems.map((w) => [w.id, w]))
+    const byEmp = {}
+    for (const s of skillRows) {
+      if (!s.employee_id) continue
+      ;(byEmp[s.employee_id] ||= []).push(s.work_item_id)
+    }
+    // 技能顯示順序與「工作項目」頁一致：依 work_items.sort，再以名稱排序
+    const enriched = employees.map((e) => {
+      const known = []
+      const unknown = []
+      for (const id of byEmp[e.id] || []) {
+        const it = itemById[id]
+        if (it) known.push(it)
+        else unknown.push({ id, name: id, icon: '' })
+      }
+      known.sort(
+        (a, b) =>
+          (Number(a.sort) || 0) - (Number(b.sort) || 0) ||
+          String(a.name).localeCompare(String(b.name), 'zh-Hant'),
+      )
+      const skills = [
+        ...known.map((it) => ({ id: it.id, name: it.name, icon: it.icon || '' })),
+        ...unknown,
+      ].filter((s) => s.name)
+      return { ...e, skills }
+    })
+    res.json({ employees: enriched })
   } catch (e) {
     next(e)
   }
 })
 
+async function setEmployeeSkills(employeeId, skillIds) {
+  const rows = await readTable('employee_skills')
+  const others = rows.filter((r) => r.employee_id !== employeeId)
+  const headers = TABLES.employee_skills
+  await replaceRows('employee_skills', [
+    headers,
+    ...others.map((r) => [r.employee_id, r.work_item_id]),
+    ...skillIds.map((id) => [employeeId, id]),
+  ])
+}
+
+function normalizeSkillIds(skills) {
+  if (!Array.isArray(skills)) return []
+  return [...new Set(skills.map((s) => String(s).trim()).filter(Boolean))]
+}
+
 router.post('/employees', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const { name, employee_no, department, employee_type, shift_hours, weekly_hours, color } = req.body || {}
+    const { name, employee_no, employee_type, shift_hours, weekly_hours, color, skills } = req.body || {}
     if (!name) return res.status(400).json({ error: '員工姓名為必填' })
     const rows = await readTable('employees')
     const colorVal = String(color ?? '').trim()
@@ -111,7 +158,6 @@ router.post('/employees', requireAuth, requireAdmin, async (req, res, next) => {
       String(nextId(rows)),
       String(name).trim(),
       String(employee_no || '').trim(),
-      String(department || '').trim(),
       employee_type === 'fulltime' ? 'fulltime' : 'parttime',
       String(shift_hours ?? ''),
       String(weekly_hours ?? ''),
@@ -119,7 +165,10 @@ router.post('/employees', requireAuth, requireAdmin, async (req, res, next) => {
       '1',
       new Date().toISOString(),
     ]
+    const skillIds = normalizeSkillIds(skills)
+    if (!skillIds.length) return res.status(400).json({ error: '請至少選擇一項工作技能' })
     await appendRows('employees', [row])
+    await setEmployeeSkills(String(row[0]), skillIds)
     const fresh = await readTable('employees')
     res.json({ employee: fresh.find((e) => e.id === row[0]) })
   } catch (e) {
@@ -132,10 +181,9 @@ router.put('/employees/:id', requireAuth, requireAdmin, async (req, res, next) =
     const rows = await readTable('employees')
     const idx = rows.findIndex((e) => e.id === req.params.id)
     if (idx === -1) return res.status(404).json({ error: '員工不存在' })
-    const { name, employee_no, department, employee_type, shift_hours, weekly_hours, active, color } = req.body || {}
+    const { name, employee_no, employee_type, shift_hours, weekly_hours, active, color, skills } = req.body || {}
     if (name !== undefined) rows[idx].name = String(name)
     if (employee_no !== undefined) rows[idx].employee_no = String(employee_no)
-    if (department !== undefined) rows[idx].department = String(department)
     if (employee_type !== undefined) rows[idx].employee_type = employee_type === 'fulltime' ? 'fulltime' : 'parttime'
     if (shift_hours !== undefined) rows[idx].shift_hours = String(shift_hours)
     if (weekly_hours !== undefined) rows[idx].weekly_hours = String(weekly_hours)
@@ -145,6 +193,11 @@ router.put('/employees/:id', requireAuth, requireAdmin, async (req, res, next) =
       const colorErr = colorVal ? validateEmployeeColor(rows, colorVal, req.params.id) : ''
       if (colorErr) return res.status(400).json({ error: colorErr })
       rows[idx].color = colorVal
+    }
+    if (skills !== undefined) {
+      const skillIds = normalizeSkillIds(skills)
+      if (!skillIds.length) return res.status(400).json({ error: '請至少選擇一項工作技能' })
+      await setEmployeeSkills(req.params.id, skillIds)
     }
     const headers = TABLES.employees
     await replaceRows('employees', [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ''))])
@@ -163,6 +216,12 @@ router.delete('/employees/:id', requireAuth, requireAdmin, async (req, res, next
     rows.splice(idx, 1)
     const headers = TABLES.employees
     await replaceRows('employees', [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ''))])
+    const skills = await readTable('employee_skills')
+    const remaining = skills.filter((r) => r.employee_id !== req.params.id)
+    await replaceRows('employee_skills', [
+      TABLES.employee_skills,
+      ...remaining.map((r) => [r.employee_id, r.work_item_id]),
+    ])
     res.json({ ok: true })
   } catch (e) {
     next(e)
@@ -280,6 +339,77 @@ router.put('/settings', requireAuth, requireAdmin, async (req, res, next) => {
     const headers = TABLES.settings
     const rows = [headers, ...list.map((s) => [String(s.key), String(s.value ?? ''), String(s.desc ?? '')])]
     await replaceRows('settings', rows)
+    res.json({ ok: true })
+  } catch (e) {
+    next(e)
+  }
+})
+
+router.get('/work-items', requireAuth, async (_req, res, next) => {
+  try {
+    const items = await readTable('work_items')
+    items.sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0))
+    res.json({ workItems: items })
+  } catch (e) {
+    next(e)
+  }
+})
+
+router.post('/work-items', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const { name, icon, sort } = req.body || {}
+    if (!name) return res.status(400).json({ error: '工作項目名稱為必填' })
+    const rows = await readTable('work_items')
+    if (rows.some((w) => w.name === String(name).trim())) {
+      return res.status(400).json({ error: '工作項目名稱重複' })
+    }
+    const row = [
+      String(nextId(rows)),
+      String(name).trim(),
+      String(icon ?? '').trim(),
+      String(sort ?? rows.length + 1),
+      new Date().toISOString(),
+    ]
+    await appendRows('work_items', [row])
+    const fresh = await readTable('work_items')
+    res.json({ workItem: fresh.find((w) => w.id === row[0]) })
+  } catch (e) {
+    next(e)
+  }
+})
+
+router.put('/work-items/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const rows = await readTable('work_items')
+    const idx = rows.findIndex((w) => w.id === req.params.id)
+    if (idx === -1) return res.status(404).json({ error: '工作項目不存在' })
+    const { name, icon, sort } = req.body || {}
+    if (name !== undefined) {
+      const trimmed = String(name).trim()
+      if (rows.some((w) => w.id !== req.params.id && w.name === trimmed)) {
+        return res.status(400).json({ error: '工作項目名稱重複' })
+      }
+      rows[idx].name = trimmed
+    }
+    if (icon !== undefined) rows[idx].icon = String(icon)
+    if (sort !== undefined) rows[idx].sort = String(sort)
+    const headers = TABLES.work_items
+    await replaceRows('work_items', [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ''))])
+    const fresh = await readTable('work_items')
+    res.json({ workItem: fresh.find((w) => w.id === req.params.id) })
+  } catch (e) {
+    next(e)
+  }
+})
+
+router.delete('/work-items/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const rows = await readTable('work_items')
+    const idx = rows.findIndex((w) => w.id === req.params.id)
+    if (idx === -1) return res.status(404).json({ error: '工作項目不存在' })
+    rows.splice(idx, 1)
+    const headers = TABLES.work_items
+    await replaceRows('work_items', [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ''))])
     res.json({ ok: true })
   } catch (e) {
     next(e)

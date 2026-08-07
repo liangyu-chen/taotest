@@ -881,6 +881,7 @@ html.modal-open .content {
 }
 
 .cal-cell {
+  position: relative;
   min-height: 118px;
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -948,7 +949,9 @@ html.modal-open .content {
   background: rgba(220, 38, 38, 0.12);
   padding: 1px 6px;
   border-radius: 999px;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
+  max-width: 100%;
 }
 
 .cal-cell__short-icon {
@@ -964,6 +967,142 @@ html.modal-open .content {
   border-color: #dc2626;
   border-style: dashed;
   box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.16);
+}
+
+.cal-cell--selected {
+  border-color: var(--accent);
+  border-style: dashed;
+  box-shadow: 0 0 0 3px rgba(31, 110, 94, 0.28);
+  cursor: pointer;
+}
+
+.cal-cell--selected.cal-cell--locked {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.32);
+}
+
+.cal-cell--locked {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(124, 58, 237, 0.06) 10px,
+      rgba(124, 58, 237, 0.06) 20px
+    ),
+    var(--panel-2);
+}
+
+html[data-view="desktop"] .cal-cell--locked .shift-chip,
+html[data-view="desktop"] .cal-cell--locked .shift-chip--add,
+html[data-view="desktop"] .cal-cell--locked .cal-emp {
+  cursor: default;
+}
+
+.cal-cell__lock {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.45;
+  filter: grayscale(0.4);
+  transition: opacity 0.15s, filter 0.15s;
+}
+
+.cal-cell__lock:hover {
+  opacity: 1;
+  filter: none;
+}
+
+.cal-cell__lock--on {
+  opacity: 1;
+  filter: none;
+  background: rgba(124, 58, 237, 0.14);
+}
+
+.lock-toolbar,
+.batch-bar {
+  position: sticky;
+  top: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--accent-soft);
+  border: 1px dashed var(--accent);
+  border-radius: 9px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+}
+
+.lock-toolbar__info,
+.batch-bar__info {
+  font-size: calc(12.5px * var(--font-scale));
+  color: var(--text);
+  margin-right: 2px;
+}
+
+.lock-toolbar__info b,
+.batch-bar__info b {
+  color: var(--accent);
+}
+
+.batch-btn {
+  --batch: #1f6e5e;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid;
+  border-color: color-mix(in srgb, var(--batch) 38%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--batch) 9%, var(--panel));
+  color: color-mix(in srgb, var(--batch) 80%, #000);
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s, background 0.12s, border-color 0.12s;
+}
+
+.batch-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  background: color-mix(in srgb, var(--batch) 16%, var(--panel));
+}
+
+.batch-btn:active {
+  transform: translateY(0);
+}
+
+.batch-btn__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--batch);
+  box-shadow: 0 0 0 1.5px var(--panel);
+  flex: none;
+}
+
+.batch-btn--clear { --batch: #16a34a; }
+.batch-btn--off { --batch: #dc2626; }
+.batch-btn--unavailable { --batch: #6b7280; }
+
+.batch-btn .shift-icon {
+  margin: 0;
 }
 
 .cal-cell__shifts {
@@ -1026,6 +1165,21 @@ button.shift-chip:not(.shift-chip--add):hover {
   white-space: nowrap;
 }
 
+.shift-chip__wi {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(10px * var(--font-scale));
+  font-weight: 600;
+  line-height: 1.2;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
 .shift-chip__note {
   flex: 0 1 auto;
   min-width: 0;
@@ -1072,6 +1226,28 @@ button.shift-chip:not(.shift-chip--add):hover {
   cursor: grab;
 }
 
+/* 拖曳中的來源班別：整個拖曳期間持續突顯，只有「被拖曳的那個人」有異動 */
+.shift-chip--source {
+  box-shadow: 0 0 0 2px var(--accent);
+  transform: translateY(-1px);
+}
+
+/* 拖曳期間：停用其他班別（含「＋」）的 hover 浮起效果，避免兩人同時被改樣態 */
+.cal.drag-active .shift-chip:not(.shift-chip--source):hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.shift-chip--locked {
+  cursor: default;
+  pointer-events: none;
+}
+
+.shift-chip--locked:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .remove-dropzone {
   position: fixed;
   left: 50%;
@@ -1096,6 +1272,13 @@ button.shift-chip:not(.shift-chip--add):hover {
   line-height: 1;
 }
 
+/* 拖曳中的姓名方塊移到垃圾桶範圍內時：變紅放大，提示放開就會移除 */
+.remove-dropzone--over {
+  background: #b91c1c;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35), var(--shadow);
+  transform: translateX(-50%) scale(1.05);
+}
+
 @keyframes remove-zone-in {
   from {
     opacity: 0;
@@ -1105,38 +1288,6 @@ button.shift-chip:not(.shift-chip--add):hover {
     opacity: 1;
     transform: translate(-50%, 0);
   }
-}
-
-.paste-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  border: 1px solid #7dd3fc;
-  border-radius: 10px;
-  background: #e0f2fe;
-  color: #075985;
-  font-size: calc(13px * var(--font-scale));
-}
-
-.paste-bar__label {
-  font-weight: 700;
-}
-
-.paste-bar__hint {
-  opacity: 0.85;
-}
-
-.option-item--paste {
-  border-color: #7dd3fc;
-  background: #e0f2fe;
-}
-
-.option-item--paste:hover {
-  border-color: #38bdf8;
-  background: #bae6fd;
 }
 
 .avail-dot--drag {
@@ -1149,14 +1300,57 @@ button.shift-chip:not(.shift-chip--add):hover {
 
 .assign-person {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px 10px;
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-2);
   margin-top: 6px;
+}
+
+.assign-person__wis {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.assign-wi {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 2px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  cursor: pointer;
+  user-select: none;
+}
+
+.assign-wi input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.assign-wi--on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.assign-wi--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.assign-wi--disabled input {
+  cursor: not-allowed;
 }
 
 .assign-note {
@@ -1298,13 +1492,15 @@ button.shift-chip:not(.shift-chip--add):hover {
   box-shadow: 0 0 0 1px #fff;
 }
 
-.legend-warn {
+.legend__item i.legend-warn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 14px;
   height: 14px;
   font-size: calc(11px * var(--font-scale));
+  line-height: 1;
+  font-style: normal;
   color: #f87171;
 }
 
@@ -1314,6 +1510,26 @@ button.shift-chip:not(.shift-chip--add):hover {
   border-radius: 4px;
   border: 1px dashed #dc2626;
   background: transparent;
+}
+
+.legend__item i.legend-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: calc(10px * var(--font-scale));
+  line-height: 1;
+  font-style: normal;
+}
+
+.legend__item i.legend-selected {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px dashed var(--accent);
+  box-shadow: 0 0 0 1px rgba(31, 110, 94, 0.3);
+  background: rgba(31, 110, 94, 0.1);
 }
 
 .legend-dot--prefer {
@@ -1618,6 +1834,30 @@ button.shift-chip:not(.shift-chip--add):hover {
   outline-offset: -2px;
 }
 
+.avail-cell--batch {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 1px rgba(31, 110, 94, 0.35);
+}
+
+.batch-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.batch-date-chip {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent-strong);
+  font-size: calc(11.5px * var(--font-scale));
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Availability overview (admin, dots + filters) ---------- */
 
 .avail-overview {
@@ -1902,6 +2142,86 @@ button.shift-chip:not(.shift-chip--add):hover {
   transform: none;
 }
 
+/* 工作技能複選 chip（員工管理） */
+.skill-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line, #d4d4d8);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  color: var(--muted, #52525b);
+  background: var(--panel, #fff);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.skill-chip input {
+  width: auto;
+  margin: 0;
+}
+
+.skill-chip--on {
+  background: #e7f4ec;
+  border-color: #16a34a;
+  color: #14532d;
+  font-weight: 600;
+}
+
+.skills-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 工作項目圖示（清單/技能 badge/chip 內的 emoji） */
+.wi-icon {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 1em;
+  line-height: 1;
+  vertical-align: -1px;
+}
+
+/* 圖示選擇（工作項目彈窗） */
+.icon-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.icon-option {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+
+.icon-option:hover {
+  transform: scale(1.08);
+}
+
+.icon-option--active {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent);
+  background: var(--accent-soft);
+}
+
 .emp-color-dot {
   display: inline-block;
   width: 10px;
@@ -2109,6 +2429,11 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) .main {
     height: auto;
     min-height: 0;
+  }
+  /* 手機版整頁以視窗滾動，解除 .main/.content 的 overflow，讓 sticky 工具列能浮動 */
+  html:not([data-view="desktop"]) .main,
+  html:not([data-view="desktop"]) .content {
+    overflow: visible;
   }
   html:not([data-view="desktop"]) .sidebar {
     flex-direction: row;
@@ -2514,10 +2839,6 @@ button.shift-chip:not(.shift-chip--add):hover {
     text-align: center;
     bottom: calc(78px + env(safe-area-inset-bottom, 0px));
   }
-  html:not([data-view="desktop"]) .paste-bar {
-    padding: 9px 12px;
-    gap: 8px;
-  }
   html:not([data-view="desktop"]) .login-card {
     padding: 26px 20px 22px;
   }
@@ -2541,6 +2862,11 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .main {
     height: auto;
     min-height: 0;
+  }
+  /* 手機版整頁以視窗滾動，解除 .main/.content 的 overflow，讓 sticky 工具列能浮動 */
+  html[data-view="mobile"] .main,
+  html[data-view="mobile"] .content {
+    overflow: visible;
   }
   html[data-view="mobile"] .sidebar {
     flex-direction: row;
@@ -2942,10 +3268,6 @@ button.shift-chip:not(.shift-chip--add):hover {
     justify-content: center;
     text-align: center;
     bottom: calc(78px + env(safe-area-inset-bottom, 0px));
-  }
-  html[data-view="mobile"] .paste-bar {
-    padding: 9px 12px;
-    gap: 8px;
   }
   html[data-view="mobile"] .login-card {
     padding: 26px 20px 22px;

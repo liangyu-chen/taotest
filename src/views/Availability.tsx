@@ -5,10 +5,10 @@
 // 畫面有兩種模式：
 //   管理員選「全部員工」→ 月曆總覽，看所有人每天狀態；
 //   選擇單一員工 → 該員工的月曆，點日期編輯狀態。
-// 支援 Ctrl+C 複製某天設定、Ctrl+V／點擊日期貼上到其他天。
+// 單人檢視可開啟「批次設定」：一次選取多天，統一設為同一樣態。
 // =============================================================
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { api } from '../api'
 import {
   dateKey,
@@ -87,9 +87,9 @@ export default function AvailabilityView() {
   const [defaultEnd, setDefaultEnd] = useState('24:00')     // 上班結束預設
   const [showStatus, setShowStatus] = useState<Set<string>>(new Set(['normal', 'off', 'unavailable', 'prefer'])) // 總覽要顯示哪些狀態
   const [showEmps, setShowEmps] = useState<Set<string>>(new Set()) // 總覽要顯示哪些員工（空 = 全部）
-  const [copyBuf, setCopyBuf] = useState<{ status: string; start_time: string; end_time: string } | null>(null) // Ctrl+C 複製的設定
-  const [pasteMode, setPasteMode] = useState(false)   // 是否在「貼上模式」
-  const lastDayRef = useRef<number | null>(null)      // 最近開過的日期（Ctrl+C 找不到當下日期時用它）
+  const [batchMode, setBatchMode] = useState(false)          // 是否在批次設定模式
+  const [batchDays, setBatchDays] = useState<Set<number>>(new Set()) // 批次設定已選取的日期
+  const [batchConfirm, setBatchConfirm] = useState<string | null>(null) // 等待確認的批次樣態（null = 無）
 
   const toggleStatus = (key: string) => {
     setShowStatus((prev) => {
@@ -222,7 +222,6 @@ export default function AvailabilityView() {
 
   // 開啟某一天的編輯彈窗（時間先填預設值）
   const openDay = (day: number) => {
-    lastDayRef.current = day
     setEditingDay(day)
     setTimeMode(null)
     setStartTime(defaultStart)
@@ -255,58 +254,62 @@ export default function AvailabilityView() {
     setTimeMode(null)
   }
 
-  // 顯示複製緩衝區的內容說明（貼上模式橫條用）
-  const bufferLabel = (b: { status: string; start_time: string; end_time: string }) => {
-    if (!b.status || b.status === 'clear') return '正常上班'
-    if (b.status === 'off') return '排休'
-    if (b.status === 'unavailable') return `沒空 ${b.start_time}–${b.end_time}`
-    return `偏好 ${shiftTypes.find((s) => s.code === b.status)?.name || b.status}`
+  // 批次樣態的說明文字（確認彈窗用）
+  const batchStatusLabel = (status: string) => {
+    if (status === 'clear') return '正常上班（恢復可排班）'
+    if (status === 'off') return '排休'
+    if (status === 'unavailable') return '沒空時段'
+    return `希望安排「${shiftTypes.find((s) => s.code === status)?.name || status}」`
   }
 
-  // Ctrl+C：複製某天的設定到緩衝區，並進入貼上模式
-  const copyFromDay = (day: number) => {
-    const rec = statusByDay.get(dateKey(year, month, day))
-    const buf = {
-      status: rec?.status || 'clear',
-      start_time: rec?.start_time || '',
-      end_time: rec?.end_time || '',
+  // 點批次樣態按鈕：先跳出確認視窗；「沒空時段」先帶入預設起訖時間
+  const requestBatch = (status: string) => {
+    if (batchDays.size === 0) {
+      toast('請先選取要設定的日期', 'error')
+      return
     }
-    setCopyBuf(buf)
-    setPasteMode(true)
-    toast(`已複製「${bufferLabel(buf)}」：點擊其他日期即可貼上（Esc 結束）`)
-  }
-
-  // 把緩衝區的設定套用到某天
-  const pasteToDay = async (day: number) => {
-    if (!copyBuf) return
-    const buf = copyBuf
-    await save(day, buf.status, buf.status === 'unavailable' ? { start: buf.start_time, end: buf.end_time } : undefined)
-  }
-
-  // 全域鍵盤監聽：Esc 結束貼上模式；Ctrl+C 複製、Ctrl+V 貼上
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && pasteMode && !editingDay) {
-        setPasteMode(false)
-        toast('已結束貼上模式')
-        return
-      }
-      if (!selected || !(e.ctrlKey || e.metaKey)) return
-      const k = e.key.toLowerCase()
-      if (k === 'c') {
-        const day = editingDay ?? lastDayRef.current
-        if (!day) return
-        e.preventDefault()
-        copyFromDay(day)
-      } else if (k === 'v') {
-        if (!copyBuf || !editingDay) return
-        e.preventDefault()
-        void pasteToDay(editingDay)
-      }
+    if (status === 'unavailable') {
+      setStartTime(defaultStart)
+      setEndTime(defaultEnd)
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
+    setBatchConfirm(status)
+  }
+
+  // 把選取的所有日期一次套用同一樣態（只重新載入一次）
+  const batchSave = async (status: string, times?: { start: string; end: string }) => {
+    const days = [...batchDays].sort((a, b) => a - b)
+    try {
+      for (const day of days) {
+        const date = dateKey(year, month, day)
+        if (status === 'clear') {
+          await api(`/availability?employee_id=${selected}&date=${date}`, { method: 'DELETE' })
+        } else {
+          await api('/availability', {
+            method: 'PUT',
+            body: {
+              employee_id: selected,
+              date,
+              status,
+              start_time: times?.start ?? '',
+              end_time: times?.end ?? '',
+            },
+          })
+        }
+      }
+      await load()
+      toast(`已將 ${days.length} 天設定為「${batchStatusLabel(status)}」`)
+      setBatchDays(new Set())
+    } catch (err) {
+      toast((err as Error).message, 'error')
+    }
+  }
+
+  // 結束批次設定模式
+  const exitBatch = () => {
+    setBatchMode(false)
+    setBatchDays(new Set())
+    setBatchConfirm(null)
+  }
 
   // 單人檢視：格子內要顯示的狀態標籤
   const renderCellTag = (rec: Availability | undefined) => {
@@ -346,17 +349,31 @@ export default function AvailabilityView() {
   return (
     <div className="view">
       <div className="view__head">
-        <MonthNav year={year} month={month} onChange={(y, m) => { setYear(y); setMonth(m) }} />
+        <MonthNav
+          year={year}
+          month={month}
+          onChange={(y, m) => {
+            setYear(y)
+            setMonth(m)
+            setBatchDays(new Set())
+          }}
+        />
         <label className="field field--inline">
           <span className="field__label">員工</span>
-          <select value={selected} onChange={(e) => setSelected(e.target.value)} disabled={!isAdmin}>
+          <select
+            value={selected}
+            onChange={(e) => {
+              setSelected(e.target.value)
+              setBatchDays(new Set())
+            }}
+            disabled={!isAdmin}
+          >
             {isAdmin ? (
               <>
                 <option value="">全部員工（總覽）</option>
                 {activeEmployees.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.name}
-                    {e.department && `（${e.department}）`}
                   </option>
                 ))}
               </>
@@ -365,6 +382,18 @@ export default function AvailabilityView() {
             )}
           </select>
         </label>
+        {selected && (
+          <button
+            type="button"
+            className={`btn btn--small${batchMode ? ' btn--primary' : ''}`}
+            onClick={() => {
+              if (batchMode) exitBatch()
+              else setBatchMode(true)
+            }}
+          >
+            {batchMode ? '結束批次設定' : '批次設定'}
+          </button>
+        )}
       </div>
 
       {isAdmin && !selected ? (
@@ -543,21 +572,55 @@ export default function AvailabilityView() {
               )
             })}
           </div>
-          {/* 貼上模式提示橫條：複製過設定後顯示，點日期或 Ctrl+V 即可貼上 */}
-          {pasteMode && copyBuf && (
-            <div className="paste-bar">
-              <span className="paste-bar__label">貼上模式：已複製「{bufferLabel(copyBuf)}」</span>
-              <span className="paste-bar__hint">點擊日期即可貼上・開啟日期後按 Ctrl+V 貼上・Esc 結束</span>
+          {/* 批次設定浮動工具列：選取多天，一次套用同一樣態 */}
+          {batchMode && (
+            <div className="batch-bar">
+              <span className="batch-bar__info">
+                批次設定・已選取 <b>{batchDays.size}</b> 天
+              </span>
               <button
                 type="button"
                 className="btn btn--small"
-                onClick={() => {
-                  setPasteMode(false)
-                  toast('已結束貼上模式')
-                }}
+                onClick={() => setBatchDays(new Set(Array.from({ length: days }, (_, i) => i + 1)))}
               >
-                結束
+                全選
               </button>
+              <button type="button" className="btn btn--small" onClick={() => setBatchDays(new Set())}>
+                取消全選
+              </button>
+              <button type="button" className="batch-btn batch-btn--clear" onClick={() => requestBatch('clear')}>
+                <i className="batch-btn__dot" />
+                正常上班
+              </button>
+              <button type="button" className="batch-btn batch-btn--off" onClick={() => requestBatch('off')}>
+                <i className="batch-btn__dot" />
+                排休
+              </button>
+              <button
+                type="button"
+                className="batch-btn batch-btn--unavailable"
+                onClick={() => requestBatch('unavailable')}
+              >
+                <i className="batch-btn__dot" />
+                沒空時段
+              </button>
+              {shiftTypes
+                .filter((s) => s.code !== 'OFF')
+                .map((s) => {
+                  const pal = statusPalette(undefined, s)
+                  return (
+                    <button
+                      key={s.code}
+                      type="button"
+                      className="batch-btn"
+                      style={{ '--batch': pal.bar } as CSSProperties}
+                      onClick={() => requestBatch(s.code)}
+                    >
+                      <ShiftIcon shift={s} size={12} />
+                      希望安排「{s.name}」
+                      </button>
+                    )
+                  })}
             </div>
           )}
           <div className="cal">
@@ -578,10 +641,15 @@ export default function AvailabilityView() {
                 <button
                   key={day}
                   type="button"
-                  className={`avail-cell${cellClass(rec)}${isToday ? ' avail-cell--today' : ''}`}
+                  className={`avail-cell${cellClass(rec)}${isToday ? ' avail-cell--today' : ''}${batchMode && batchDays.has(day) ? ' avail-cell--batch' : ''}`}
                   onClick={() => {
-                    if (pasteMode && copyBuf) {
-                      void pasteToDay(day)
+                    if (batchMode) {
+                      setBatchDays((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(day)) next.delete(day)
+                        else next.add(day)
+                        return next
+                      })
                       return
                     }
                     openDay(day)
@@ -595,7 +663,7 @@ export default function AvailabilityView() {
             })}
           </div>
           <p className="hint">
-            點擊日期設定當天狀態：「排休」整天不排班；「沒空時段」表示該時段不排班；也可指定當日偏好安排早班或晚班。設定好某天的狀態後，按 <b>Ctrl+C</b> 複製該設定，再<b>點擊其他日期</b>或<b>按 Ctrl+V</b> 即可一次貼到多天（Esc 結束）。
+            點擊日期可單獨設定當天狀態：「排休」整天不排班；「沒空時段」表示該時段不排班；也可指定當日偏好安排早班或晚班。若要一次設定多天，按右上角〈批次設定〉選取日期後，即可統一設為同一樣態。
           </p>
         </div>
         </>
@@ -641,35 +709,8 @@ export default function AvailabilityView() {
                 </div>
               </div>
             ) : (
-              // 第二層：選擇這天的狀態（正常/排休/沒空/偏好某班別），並支援複製貼上
+              // 第二層：選擇這天的狀態（正常/排休/沒空/偏好某班別）
               <div className="option-list">
-                {copyBuf && (
-                  <button
-                    type="button"
-                    className="option-item option-item--paste"
-                    onClick={async () => {
-                      await pasteToDay(editingDay)
-                      setEditingDay(null)
-                    }}
-                  >
-                    <span className="option-item__dot" style={{ background: '#0ea5e9' }} />
-                    貼上「{bufferLabel(copyBuf)}」到此日期
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="option-item"
-                  onClick={() => {
-                    copyFromDay(editingDay)
-                    setEditingDay(null)
-                  }}
-                >
-                  <span
-                    className="option-item__dot"
-                    style={{ background: 'transparent', border: '1.5px dashed var(--line-strong)' }}
-                  />
-                  複製此日期的設定（Ctrl+C）
-                </button>
                 <button
                   type="button"
                   className="option-item"
@@ -718,6 +759,68 @@ export default function AvailabilityView() {
                   ))}
               </div>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {batchConfirm && (
+        <Modal title="批次設定確認" onClose={() => setBatchConfirm(null)}>
+          <div className="stack">
+            <p className="modal-lead">
+              您將在{month} 月份，對 <b>{batchDays.size}</b> 天設定為「{batchStatusLabel(batchConfirm)}」，是否確定？
+            </p>
+            <div className="batch-dates">
+              {[...batchDays].sort((a, b) => a - b).map((d) => (
+                <span key={d} className="batch-date-chip">
+                  {month}/{d}
+                </span>
+              ))}
+            </div>
+            {batchConfirm === 'unavailable' && (
+              <>
+                <div className="form-row">
+                  <Field label="沒空時段開始">
+                    <select value={startTime} onChange={(e) => setStartTime(e.target.value)}>
+                      {TIME_OPTIONS.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="沒空時段結束">
+                    <select value={endTime} onChange={(e) => setEndTime(e.target.value)}>
+                      {TIME_OPTIONS.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+                <p className="hint">選取的所有日期都會使用同一個沒空時段（該時段內不排班）。</p>
+              </>
+            )}
+            <div className="modal__actions">
+              <button type="button" className="btn" onClick={() => setBatchConfirm(null)}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={async () => {
+                  const status = batchConfirm
+                  if (status === 'unavailable' && startTime >= endTime) {
+                    toast('結束時段必須晚於開始時段', 'error')
+                    return
+                  }
+                  setBatchConfirm(null)
+                  await batchSave(status, status === 'unavailable' ? { start: startTime, end: endTime } : undefined)
+                }}
+              >
+                確認設定
+              </button>
+            </div>
           </div>
         </Modal>
       )}

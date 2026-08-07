@@ -11,6 +11,7 @@ import {
   type Headcount,
   type Setting,
   type ShiftType,
+  type WorkItem,
 } from '../types'
 import MonthNav from '../components/MonthNav'
 import { Spinner, toast } from '../components/ui'
@@ -29,6 +30,7 @@ export default function Generate() {
   const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([])
   const [headcounts, setHeadcounts] = useState<Headcount[]>([])
   const [settings, setSettings] = useState<Setting[]>([])
+  const [workItems, setWorkItems] = useState<WorkItem[]>([])
   const [result, setResult] = useState<GenerateResult | null>(null) // 最近一次產生結果
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -36,16 +38,18 @@ export default function Generate() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [e, s, h, st] = await Promise.all([
+      const [e, s, h, st, w] = await Promise.all([
         api<{ employees: Employee[] }>('/employees'),
         api<{ shiftTypes: ShiftType[] }>('/shift-types'),
         api<{ headcounts: Headcount[] }>('/headcounts'),
         api<{ settings: Setting[] }>('/settings'),
+        api<{ workItems: WorkItem[] }>('/work-items'),
       ])
       setEmployees(e.employees)
       setShiftTypes(s.shiftTypes)
       setHeadcounts(h.headcounts)
       setSettings(st.settings)
+      setWorkItems(w.workItems)
     } catch (err) {
       toast((err as Error).message, 'error')
     } finally {
@@ -96,7 +100,7 @@ export default function Generate() {
       const res = await api<GenerateResult>('/schedule/generate', { method: 'POST', body: { year, month } })
       setResult(res)
       toast(
-        res.unfilled.length > 0 ? `已產生，但 ${res.unfilled.length} 個時段人力不足` : `已產生 ${res.summary.totalSlots} 班`,
+        res.unfilled.length > 0 ? `已產生，但 ${res.unfilled.length} 個時段人力/工作未滿足` : `已產生 ${res.summary.totalSlots} 班`,
         res.unfilled.length > 0 ? 'error' : 'ok',
       )
     } catch (err) {
@@ -173,21 +177,22 @@ export default function Generate() {
                 <span>共排 {result.summary.totalSlots} 班</span>
                 <span>參與員工 {result.summary.employees} 人</span>
                 {result.unfilled.length > 0 ? (
-                  <span className="badge badge--off">{result.unfilled.length} 個時段人力不足</span>
+                  <span className="badge badge--off">{result.unfilled.length} 個時段人力/工作未滿足</span>
                 ) : (
-                  <span className="badge badge--on">全數滿足人力需求</span>
+                  <span className="badge badge--on">全數滿足人力與工作項目需求</span>
                 )}
               </div>
 
               {result.unfilled.length > 0 && (
                 <div className="unfilled">
-                  <p className="unfilled__title">人力不足的時段：</p>
+                  <p className="unfilled__title">人力/工作未滿足的時段：</p>
                   <div className="unfilled__grid">
                     {result.unfilled.map((u) => {
                       const s = shiftTypes.find((x) => x.code === u.shift_code)
                       return (
-                        <span key={`${u.day}-${u.shift_code}`} className="unfilled-chip">
+                        <span key={`${u.day}-${u.shift_code}-${u.work_item || ''}`} className="unfilled-chip">
                           {month}/{u.day} {s?.name || u.shift_code}
+                          {u.work_item ? `（${workItems.find((w) => String(w.id) === u.work_item)?.name || u.work_item}）` : ''}
                         </span>
                       )
                     })}

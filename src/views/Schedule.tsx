@@ -15,6 +15,7 @@ import {
   type Headcount,
   type Setting,
   type ShiftType,
+  type WorkItem,
 } from '../types'
 import { useAuth } from '../auth'
 import MonthNav from '../components/MonthNav'
@@ -58,6 +59,8 @@ function useMonthData() {
   const [availability, setAvailability] = useState<Availability[]>([])
   const [headcounts, setHeadcounts] = useState<Headcount[]>([]) // 每班別每種日型的需求人數（判斷人力不足用）
   const [settings, setSettings] = useState<Setting[]>([])       // 含例假日清單（判斷某天是平日/週末/例假日用）
+  const [workItems, setWorkItems] = useState<WorkItem[]>([])    // 工作項目（吧台/內場…，判斷工作項目是否滿足用）
+  const [lockedDays, setLockedDays] = useState<number[]>([])    // 已鎖定的日期（自動排班會保留原狀）
   const [loading, setLoading] = useState(true)
   const assignmentsRef = useRef<Assignment[]>([])
 
@@ -67,13 +70,15 @@ function useMonthData() {
       const silent = !!opts?.silent
       if (!silent) setLoading(true)
       try {
-        const [a, e, s, av, hc, st] = await Promise.all([
+        const [a, e, s, av, hc, st, wi, lk] = await Promise.all([
           api<{ assignments: Assignment[] }>(`/schedule?year=${year}&month=${month}`),
           api<{ employees: Employee[] }>('/employees'),
           api<{ shiftTypes: ShiftType[] }>('/shift-types'),
           api<{ availability: Availability[] }>(`/availability?year=${year}&month=${month}`),
           api<{ headcounts: Headcount[] }>('/headcounts'),
           api<{ settings: Setting[] }>('/settings'),
+          api<{ workItems: WorkItem[] }>('/work-items'),
+          api<{ lockedDays: number[] }>(`/schedule/locks?year=${year}&month=${month}`),
         ])
         // 靜默重整時，避免後端一時回空班表把剛排好的資料洗掉
         if (!(silent && a.assignments.length === 0 && assignmentsRef.current.length > 0)) {
@@ -84,6 +89,8 @@ function useMonthData() {
         setAvailability(av.availability)
         setHeadcounts(hc.headcounts)
         setSettings(st.settings)
+        setWorkItems(wi.workItems)
+        setLockedDays(lk.lockedDays)
       } catch (err) {
         toast((err as Error).message, 'error')
       } finally {
@@ -103,18 +110,89 @@ function useMonthData() {
     void load()
   }, [load])
 
-  return { year, month, setYear, setMonth, assignments, setAssignments, employees, shiftTypes, availability, headcounts, settings, loading, reload: load }
+  return { year, month, setYear, setMonth, assignments, setAssignments, employees, shiftTypes, availability, headcounts, settings, workItems, lockedDays, setLockedDays, loading, reload: load }
 }
 
 export default function Schedule() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
   const data = useMonthData()
-  const { year, month, assignments, employees, shiftTypes, availability, headcounts, settings } = data
+  const { year, month, assignments, employees, shiftTypes, availability, headcounts, settings, workItems } = data
   const [editing, setEditing] = useState<{ day: number; shiftCode: string | null; employeeId?: string } | null>(null) // 正在編輯哪一天的指派（null = 沒開彈窗）
   const [dropTarget, setDropTarget] = useState<string | null>(null)            // 拖曳中目前停在哪個格子（用來加亮「＋」或班別）
   const [removeDrag, setRemoveDrag] = useState<{ day: number; shift_code: string; employee_id: string } | null>(null) // 拖曳移除中的人員
+  const [removeDragOver, setRemoveDragOver] = useState(false) // 拖曳中的人員是否正指在垃圾桶上（用來亮起垃圾桶）
+  const [isDragging, setIsDragging] = useState(false)                          // 是否正在拖曳（用來停用其他班別的 hover 效果，只突顯被拖曳者）
   const [generating, setGenerating] = useState(false)                          // 是否正在自動排班
+  const [confirmGenerate, setConfirmGenerate] = useState(false)                // 是否顯示「自動排班」確認彈窗
+  const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set())     // 被選取的日期（點格子選取，可多選）
+  const { lockedDays, setLockedDays } = data
+
+  // 切換月份時清掉目前的選取，避免選到舊月份的天數
+  useEffect(() => {
+    setSelectedDays(new Set())
+  }, [year, month])
+
+  // 點格子切換選取狀態（管理員限定；選擇後可用「鎖定/解除鎖定」一次處理多天）
+  const toggleSelectDay = (day: number) => {
+    if (!isAdmin) return
+    setSelectedDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(day)) next.delete(day)
+      else next.add(day)
+      return next
+    })
+  }
+
+  // 鎖定或解除鎖定指定的日期，成功後更新畫面
+  const applyLock = async (days: number[], locked: boolean) => {
+    if (days.length === 0 || !isAdmin) return
+    try {
+      await api('/schedule/locks', {
+        method: 'PUT',
+        body: { year, month, days, locked },
+      })
+      setLockedDays((prev) => {
+        const set = new Set(prev)
+        for (const d of days) {
+          if (locked) set.add(d)
+          else set.delete(d)
+        }
+        return [...set].sort((a, b) => a - b)
+      })
+      toast(locked ? `已鎖定 ${days.length} 天（自動排班不會更動）` : `已解除 ${days.length} 天的鎖定`)
+    } catch (err) {
+      toast((err as Error).message, 'error')
+    }
+  }
+
+  // 執行自動排班：叫後端跑演算法，完成後用回傳的班表刷新畫面
+  const runGenerate = async () => {
+    if (generating) return
+    const startedAt = Date.now()
+    setGenerating(true)
+    try {
+      const res = await api<{ assignments: Assignment[]; unfilled: { day: number; shift_code: string }[]; summary: { totalSlots: number; employees: number } }>('/schedule/generate', {
+        method: 'POST',
+        body: { year, month },
+      })
+      data.setAssignments(res.assignments)
+      data.reload()
+      const unfilledCount = res.unfilled.length
+      toast(
+        unfilledCount > 0
+          ? `已產生班表（${res.summary.totalSlots} 班），但有 ${unfilledCount} 個時段人力/工作未滿足`
+          : `已產生班表：共 ${res.summary.totalSlots} 班`,
+        unfilledCount > 0 ? 'error' : 'ok',
+      )
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    } finally {
+      // 至少顯示 1 秒的「排班中」動畫，避免一閃而過
+      const remain = 1000 - (Date.now() - startedAt)
+      setTimeout(() => setGenerating(false), Math.max(0, remain))
+    }
+  }
 
   // 把「員工陣列」轉成「ID → 員工」的查詢表，方便直接查姓名/顏色
   const empById = useMemo(() => {
@@ -129,6 +207,18 @@ export default function Schedule() {
     for (const s of shiftTypes) m.set(s.code, s)
     return m
   }, [shiftTypes])
+
+  // 把「1,2」這種逗號分隔的工作項目 id 字串轉成 WorkItem 列表（供姓名後方顯示）。
+  // 一律依 workItems 的排序（工作項目管理頁的 sort）顯示，避免存檔順序不同導致圖示亂跳
+  const workItemsOf = (raw?: string): WorkItem[] => {
+    const ids = new Set(
+      String(raw || '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean),
+    )
+    return workItems.filter((w) => ids.has(String(w.id)))
+  }
 
   // 例假日清單（來自排班規則設定）→ Set，供 dayTypeOf 判斷某天是 平日/週末/例假日
   const holidaySet = useMemo(() => {
@@ -216,6 +306,10 @@ export default function Schedule() {
   const dropToAssign = (day: number, shiftCode: string | null, e: React.DragEvent) => {
     const empId = e.dataTransfer.getData('application/x-emp-id')
     if (!empId || !isAdmin) return
+    if (lockedDays.includes(day)) {
+      toast('此日已鎖定，無法新增排班', 'error')
+      return
+    }
     const todayAssignments = assignments.filter((a) => a.day === day)
     const empIdsToday = new Set(todayAssignments.map((a) => a.employee_id))
     if (empIdsToday.has(empId)) {
@@ -228,6 +322,10 @@ export default function Schedule() {
 
   // 移除一筆排班：送 PUT /schedule/assign 帶 action:'remove'，成功後靜默重整
   const removeAssignment = async (target: { day: number; shift_code: string; employee_id: string }) => {
+    if (lockedDays.includes(target.day)) {
+      toast('此日已鎖定，無法移除排班', 'error')
+      return
+    }
     const emp = empById.get(target.employee_id)
     try {
       await api('/schedule/assign', {
@@ -242,6 +340,13 @@ export default function Schedule() {
         },
       })
       toast(`已移除「${emp?.name || '該員工'}」`)
+      // 直接更新畫面：否則「本月只剩這筆、移除後回空班表」時，
+      // 靜默重整的防洗掉保護會把回空結果擋掉，畫面就不會更新
+      data.setAssignments((prev) =>
+        prev.filter(
+          (a) => !(a.day === target.day && a.shift_code === target.shift_code && a.employee_id === target.employee_id),
+        ),
+      )
       await data.reload({ silent: true })
     } catch (err) {
       toast((err as Error).message, 'error')
@@ -252,11 +357,15 @@ export default function Schedule() {
   // 做法：先從原班別移除，再加到目標班別（備註一併帶過去）；
   // 若第二步失敗會自動還原，避免人員消失。
   const swapAssignment = async (
-    src: { day: number; shift_code: string; employee_id: string; note?: string },
+    src: { day: number; shift_code: string; employee_id: string; note?: string; work_item?: string },
     dst: { day: number; shift_code: string },
   ) => {
     if (src.day !== dst.day) {
       toast('只能在同一日內置換班別', 'error')
+      return
+    }
+    if (lockedDays.includes(src.day)) {
+      toast('此日已鎖定，無法更動排班', 'error')
       return
     }
     if (src.shift_code === dst.shift_code) {
@@ -284,6 +393,7 @@ export default function Schedule() {
           employee_id: src.employee_id,
           action: 'add',
           note: src.note || '',
+          work_item: src.work_item || '',
         },
       })
     } catch (err) {
@@ -291,7 +401,7 @@ export default function Schedule() {
       try {
         await api('/schedule/assign', {
           method: 'PUT',
-          body: { year, month, day: src.day, shift_code: src.shift_code, employee_id: src.employee_id, action: 'add', note: src.note || '' },
+          body: { year, month, day: src.day, shift_code: src.shift_code, employee_id: src.employee_id, action: 'add', note: src.note || '', work_item: src.work_item || '' },
         })
       } catch {
         /* 還原失敗則忽略 */
@@ -308,6 +418,8 @@ export default function Schedule() {
     const slots = slotsByDay[day] || []
     const key = dateKey(year, month, day)
     const isToday = key === todayKey
+    const isLocked = lockedDays.includes(day)
+    const isSelected = selectedDays.has(day)
     const weekday = WEEKDAYS[(offset + day - 1) % 7]
     const scheduledEmpIds = new Set(slots.map((s) => s.assignment!.employee_id))
     // 依班別開始時間判斷上午(<15點)或下午，把格子分成兩半
@@ -318,26 +430,47 @@ export default function Schedule() {
     const amSlots = slots.filter((s) => isAm(shiftById.get(s.assignment!.shift_code)))
     const pmSlots = slots.filter((s) => !isAm(shiftById.get(s.assignment!.shift_code)))
 
-    // 判斷這天「人力不足」：逐班別比對 需求人數 > 實際排班人數。
-    // 需求 0 = 該班當日不開，不算不足；完全沒排到人的班別也會被算進去
+    // 判斷這天「人力/工作未滿足」：
+    // 1) 人力不足：逐班別比對 需求人數 > 實際排班人數（需求 0 = 該班當日不開，不算）
+    // 2) 工作項目未滿足：有需求人數的班別，每個工作項目都要至少一人負責
     const dayType = dayTypeOf(year, month, day, holidaySet)
     const countByShift: Record<string, number> = {}
     for (const s of slots) {
       const code = s.assignment!.shift_code
       countByShift[code] = (countByShift[code] || 0) + 1
     }
-    let hasShort = false
+    let headcountShort = false
+    let workItemShort = false
     for (const st of shiftTypes) {
       if (st.code === 'OFF') continue
       const need = headcountMap.get(`${st.code}:${dayType}`) || 0
-      if (need > 0 && (countByShift[st.code] || 0) < need) {
-        hasShort = true
-        break
+      if (need <= 0) continue
+      if ((countByShift[st.code] || 0) < need) {
+        headcountShort = true
       }
+      if (workItems.length > 0) {
+        const shiftSlots = slots.filter((s) => s.assignment!.shift_code === st.code)
+        for (const w of workItems) {
+          const covered = shiftSlots.some((s) =>
+            String(s.assignment!.work_item || '')
+              .split(',')
+              .map((id) => id.trim())
+              .includes(String(w.id)),
+          )
+          if (!covered) {
+            workItemShort = true
+            break
+          }
+        }
+      }
+      if (headcountShort && workItemShort) break
     }
+    const hasShort = headcountShort || workItemShort
+    const shortTitle = workItemShort ? '尚有班別人力/工作未滿足' : '尚有班別未達需求人數'
 
     // 一個「已排班的姓名方塊」（shift-chip）：
-    // 底色 = 員工代表色；可點擊編輯；可拖曳到其他班別置換、到下方「移除此人員」區塊移除
+    // 底色 = 員工代表色；可點擊編輯；可拖曳到其他班別置換、到下方「移除此人員」區塊移除。
+    // 已鎖定的日期完全不可更動（不顯示編輯提示、不可拖曳、不可接收）
     const renderSlot = (slot: ShiftSlot) => {
       const shift = shiftById.get(slot.assignment!.shift_code)
       const name = slot.employee?.name || '?'
@@ -348,12 +481,15 @@ export default function Schedule() {
         <button
           key={`${code}:${slot.assignment!.employee_id}`}
           type="button"
-          draggable={isAdmin}
-          className={`shift-chip${conflict ? ' shift-chip--conflict' : ''}${dropTarget === `${day}:${code}` ? ' shift-chip--drop' : ''}${isAdmin ? ' shift-chip--drag' : ''}`}
+          draggable={isAdmin && !isLocked}
+          className={`shift-chip${conflict ? ' shift-chip--conflict' : ''}${dropTarget === `${day}:${code}` ? ' shift-chip--drop' : ''}${isAdmin ? ' shift-chip--drag' : ''}${isLocked ? ' shift-chip--locked' : ''}${removeDrag && removeDrag.day === day && removeDrag.shift_code === slot.assignment!.shift_code && removeDrag.employee_id === slot.assignment!.employee_id ? ' shift-chip--source' : ''}`}
           style={slot.employee?.color ? { background: slot.employee.color, color: chipTextColor(slot.employee.color), borderColor: 'rgba(0, 0, 0, 0.16)' } : undefined}
-          onClick={() => isAdmin && setEditing({ day, shiftCode: code })}
+          onClick={(e) => {
+            e.stopPropagation()
+            if (isAdmin && !isLocked) setEditing({ day, shiftCode: code })
+          }}
           onDragStart={(ev) => {
-            if (!isAdmin) return
+            if (!isAdmin || isLocked) return
             // 拖曳開始：寫入「來源班別/人員」資料，並亮出下方的移除區塊。
             // 放到其他班別 = 置換；放到下方區塊 = 移除
             ev.dataTransfer.setData(
@@ -363,16 +499,25 @@ export default function Schedule() {
                 shift_code: slot.assignment!.shift_code,
                 employee_id: slot.assignment!.employee_id,
                 note: slot.assignment!.note || '',
+                work_item: slot.assignment!.work_item || '',
               }),
             )
             ev.dataTransfer.effectAllowed = 'move'
             setRemoveDrag({ day, shift_code: slot.assignment!.shift_code, employee_id: slot.assignment!.employee_id })
+            setRemoveDragOver(false)
+            setIsDragging(true)
           }}
-          onDragEnd={() => setRemoveDrag(null)}
+          onDragEnd={() => {
+            setRemoveDrag(null)
+            setRemoveDragOver(false)
+            setDropTarget(null)
+            setIsDragging(false)
+          }}
           onDragOver={(ev) => {
             // 接受「員工圓點」拖進來（新增人員），也接受「其他班別的姓名方塊」拖進來（置換）
             if (
               isAdmin &&
+              !isLocked &&
               (ev.dataTransfer.types.includes('application/x-emp-id') ||
                 ev.dataTransfer.types.includes('application/x-remove-shift'))
             ) {
@@ -384,6 +529,10 @@ export default function Schedule() {
           onDrop={(ev) => {
             ev.preventDefault()
             setDropTarget(null)
+            if (isLocked) {
+              toast('此日已鎖定，無法更動排班', 'error')
+              return
+            }
             const srcRaw = ev.dataTransfer.getData('application/x-remove-shift')
             if (srcRaw) {
               // 拖來的是「別的班別的姓名方塊」→ 置換到這個班別
@@ -394,6 +543,7 @@ export default function Schedule() {
                   shift_code: string
                   employee_id: string
                   note?: string
+                  work_item?: string
                 }
                 void swapAssignment(src, { day, shift_code: slot.assignment!.shift_code })
               } catch {
@@ -403,7 +553,7 @@ export default function Schedule() {
             }
             dropToAssign(day, slot.assignment!.shift_code, ev)
           }}
-          title={`${isAdmin ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : ''}${shift?.name || ''}・${name}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}`}
+          title={`${isAdmin && !isLocked ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : isLocked ? '此日已鎖定，無法更動排班。' : ''}${shift?.name || ''}・${name}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}`}
         >
           {conflict && (
             <span className="shift-chip__warn" title={`${name} 當日標記「${statusLabel(rec)}」`}>
@@ -411,20 +561,36 @@ export default function Schedule() {
             </span>
           )}
           <span className="shift-chip__name">{name}</span>
+          {workItemsOf(slot.assignment!.work_item).map((w) => (
+            <span key={w.id} className="shift-chip__wi" title={w.name}>
+              {w.icon || w.name}
+            </span>
+          ))}
           {slot.assignment!.note && <span className="shift-chip__note">{slot.assignment!.note}</span>}
         </button>
       )
     }
 
     return (
-      <div key={day} className={`cal-cell${isToday ? ' cal-cell--today' : ''}${hasShort ? ' cal-cell--short' : ''}`}>
+      <div
+        key={day}
+        className={`cal-cell${isToday ? ' cal-cell--today' : ''}${hasShort ? ' cal-cell--short' : ''}${isLocked ? ' cal-cell--locked' : ''}${isSelected ? ' cal-cell--selected' : ''}`}
+        onClick={() => toggleSelectDay(day)}
+        title={
+          isAdmin
+            ? isLocked
+              ? '此日已鎖定：自動排班不會更動，也無法手動新增/移除排班。點格子可選取後解鎖。'
+              : '點一下格子可選取，再用上方「鎖定所選」讓自動排班不更動這天。'
+            : undefined
+        }
+      >
         <div className="cal-cell__head">
           <span className="cal-cell__day">{month}/{day}</span>
           <span className="cal-cell__week">{weekday}</span>
           <span className="cal-cell__flags">
             {hasShort && (
-              <span className="cal-cell__short" title="尚有班別未達需求人數">
-                <span className="cal-cell__short-icon">⚠</span>人力不足
+              <span className="cal-cell__short" title={shortTitle}>
+                <span className="cal-cell__short-icon">⚠</span>人力/工作未滿足
               </span>
             )}
             {isToday && <span className="cal-cell__today">今天</span>}
@@ -447,14 +613,18 @@ export default function Schedule() {
               )}
             </>
           ) : null}
-          {/* 「＋」按鈕：點擊開啟人力指派；也可把員工圓點拖到這裡加入新班別 */}
-          {isAdmin && (
+          {/* 「＋」按鈕：點擊開啟人力指派；也可把員工圓點拖到這裡加入新班別。
+              已鎖定的日期不顯示「＋」，等同完全不能新增排班 */}
+          {isAdmin && !isLocked && (
             <button
               type="button"
               className={`shift-chip shift-chip--add${dropTarget === `${day}:+` ? ' shift-chip--drop' : ''}`}
-              onClick={() => setEditing({ day, shiftCode: null })}
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditing({ day, shiftCode: null })
+              }}
               onDragOver={(ev) => {
-                if (isAdmin && ev.dataTransfer.types.includes('application/x-emp-id')) {
+                if (isAdmin && !isLocked && ev.dataTransfer.types.includes('application/x-emp-id')) {
                   ev.preventDefault()
                   ev.dataTransfer.dropEffect = 'move'
                   setDropTarget(`${day}:+`)
@@ -485,16 +655,22 @@ export default function Schedule() {
                 <button
                   key={emp.id}
                   type="button"
-                  draggable={isAdmin}
+                  draggable={isAdmin && !isLocked}
                   className={`cal-emp${onDuty ? ' cal-emp--duty' : ''}${conflict ? ' cal-emp--conflict' : ''}`}
                   style={{ background: pal.bg, color: pal.fg, borderColor: pal.border }}
+                  onClick={(e) => e.stopPropagation()}
                   onDragStart={(ev) => {
+                    if (isLocked) return
                     ev.dataTransfer.setData('application/x-emp-id', emp.id)
                     ev.dataTransfer.effectAllowed = 'move'
                     setDropTarget(null)
+                    setIsDragging(true)
                   }}
-                  onDragEnd={() => setDropTarget(null)}
-                  title={`${emp.name}：${statusLabel(rec)}${onDuty ? '（已排班）' : ''}${isAdmin ? '（可拖曳到「＋」或任一班別自動加入）' : ''}`}
+                  onDragEnd={() => {
+                    setDropTarget(null)
+                    setIsDragging(false)
+                  }}
+                  title={`${emp.name}：${statusLabel(rec)}${onDuty ? '（已排班）' : ''}${isLocked ? '（此日已鎖定）' : isAdmin ? '（可拖曳到「＋」或任一班別自動加入）' : ''}`}
                 >
                   {isPrefer && preferShift ? (
                     <ShiftIcon shift={preferShift} size={12} />
@@ -508,6 +684,20 @@ export default function Schedule() {
           </div>
         )}
         {!isAdmin && slots.length === 0 && <div className="cal-cell__empty">—</div>}
+        {/* 鎖頭：固定在格子右下角，方便一眼看出哪幾天被鎖定 */}
+        {isAdmin && (
+          <button
+            type="button"
+            className={`cal-cell__lock${isLocked ? ' cal-cell__lock--on' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              void applyLock([day], !isLocked)
+            }}
+            title={isLocked ? '已鎖定：自動排班不會更動這天。點擊解除鎖定' : '鎖定這天：自動排班不會更動既有人員'}
+          >
+            {isLocked ? '🔒' : '🔓'}
+          </button>
+        )}
       </div>
     )
   }
@@ -522,34 +712,7 @@ export default function Schedule() {
             type="button"
             className="btn btn--primary"
             disabled={generating}
-            onClick={() => {
-              // 按下「自動排班」：叫後端跑演算法，完成後用回傳的班表刷新畫面
-              const startedAt = Date.now()
-              setGenerating(true)
-              void (async () => {
-                try {
-                  const res = await api<{ assignments: Assignment[]; unfilled: { day: number; shift_code: string }[]; summary: { totalSlots: number; employees: number } }>('/schedule/generate', {
-                    method: 'POST',
-                    body: { year, month },
-                  })
-                  data.setAssignments(res.assignments)
-                  data.reload()
-                  const unfilledCount = res.unfilled.length
-                  toast(
-                    unfilledCount > 0
-                      ? `已產生班表（${res.summary.totalSlots} 班），但有 ${unfilledCount} 個時段人力不足`
-                      : `已產生班表：共 ${res.summary.totalSlots} 班`,
-                    unfilledCount > 0 ? 'error' : 'ok',
-                  )
-                } catch (e) {
-                  toast((e as Error).message, 'error')
-                } finally {
-                  // 至少顯示 1 秒的「排班中」動畫，避免一閃而過
-                  const remain = 1000 - (Date.now() - startedAt)
-                  setTimeout(() => setGenerating(false), Math.max(0, remain))
-                }
-              })()
-            }}
+            onClick={() => setConfirmGenerate(true)}
           >
             {generating ? '⟳ 排班中…' : '⟳ 自動排班'}
           </button>
@@ -562,6 +725,25 @@ export default function Schedule() {
             <div className="gen-progress__bar" />
           </div>
           <span className="gen-progress__label">正在自動排班…</span>
+        </div>
+      )}
+
+      {/* 鎖定工具列：選取格子後出現，可一次鎖定/解除多天 */}
+      {isAdmin && selectedDays.size > 0 && (
+        <div className="lock-toolbar">
+          <span className="lock-toolbar__info">
+            已選取 <b>{selectedDays.size}</b> 天
+            {[...selectedDays].some((d) => lockedDays.includes(d)) && '（含已鎖定天）'}
+          </span>
+          <button type="button" className="btn btn--small btn--primary" onClick={() => void applyLock([...selectedDays], true)}>
+            🔒 鎖定所選
+          </button>
+          <button type="button" className="btn btn--small" onClick={() => void applyLock([...selectedDays], false)}>
+            🔓 解除鎖定
+          </button>
+          <button type="button" className="btn btn--small" onClick={() => setSelectedDays(new Set())}>
+            取消選取
+          </button>
         </div>
       )}
 
@@ -594,7 +776,15 @@ export default function Schedule() {
               </span>
               <span className="legend__item">
                 <i className="legend-short" />
-                人力不足
+                人力/工作未滿足
+              </span>
+              <span className="legend__item">
+                <i className="legend-lock">🔒</i>
+                已鎖定（自動排班不更動）
+              </span>
+              <span className="legend__item">
+                <i className="legend-selected" />
+                已選取
               </span>
               {workShifts.map((s) => (
                 <span key={s.code} className="legend__item">
@@ -606,7 +796,7 @@ export default function Schedule() {
           )}
 
           {/* 月曆本體：星期標題 + 空白填位 + 每一天 */}
-          <div className="cal cal--month">
+          <div className={`cal cal--month${isDragging ? ' drag-active' : ''}`}>
             <div className="cal__grid">
               {WEEKDAYS.map((w, i) => (
                 <div key={w} className={`cal-weekhead${i >= 5 ? ' cal-weekhead--weekend' : ''}`}>
@@ -642,7 +832,7 @@ export default function Schedule() {
                         <i className="emp-color-dot" style={{ background: employee.color || '#6b7280' }} />
                         {employee.name}
                       </span>
-                      <em>{employee.department}{extra && `・${extra}`}</em>
+                      {extra && <em>{extra}</em>}
                     </span>
                     <div className="stat-row__bar">
                       <div className="stat-row__fill" style={{ width: `${(total / stats.max) * 100}%` }} />
@@ -675,6 +865,7 @@ export default function Schedule() {
           initialEmployeeId={editing.employeeId}
           shiftTypes={shiftTypes}
           employees={employees}
+          workItems={workItems}
           assignedDay={assignments.filter((a) => a.day === editing.day)}
           onClose={(finalLocal) => {
             setEditing(null)
@@ -686,7 +877,7 @@ export default function Schedule() {
 
       {isAdmin && (
         <p className="hint">
-          提示：班別可直接點擊修改人力；格子下方圓點為各員工當日狀態，<b>拖曳圓點到「＋」或任一班別會跳出視窗選擇要加入的班別</b>。<b>拖曳已排班的姓名方塊到其他班別可直接「置換」班別</b>，<b>拖到下方「移除此人員」區塊則直接移除</b>。有「⚠」代表該員工已排班但當日標記排休或沒空，請檢查。<b>日期格子有紅色虛線外框＋「⚠人力不足」標籤</b>代表當日尚有班別未達〈班別與人力〉的需求人數。
+          提示：班別可直接點擊修改人力；格子下方圓點為各員工當日狀態，<b>拖曳圓點到「＋」或任一班別會跳出視窗選擇要加入的班別</b>。<b>拖曳已排班的姓名方塊到其他班別可直接「置換」班別</b>，<b>拖到下方「移除此人員」區塊則直接移除</b>。有「⚠」代表該員工已排班但當日標記排休或沒空，請檢查。姓名後方的 🍸/🍳 是該員工當日負責的工作項目。<b>日期格子有紅色虛線外框＋「⚠人力/工作未滿足」標籤</b>代表當日尚有班別未達需求人數，或該班的吧台/內場工作項目還沒有人負責。
           {(() => {
             const offCount = availability.filter((a) => a.status === 'off').length
             return offCount > 0 ? ` 本月共有 ${offCount} 個排休記錄。` : ''
@@ -697,14 +888,18 @@ export default function Schedule() {
       {/* 拖曳移除時浮出的紅色區塊：把姓名方塊拖到這裡放開就移除 */}
       {removeDrag && (
         <div
-          className="remove-dropzone"
+          className={`remove-dropzone${removeDragOver ? ' remove-dropzone--over' : ''}`}
           onDragOver={(ev) => {
             ev.preventDefault()
             ev.dataTransfer.dropEffect = 'move'
+            setRemoveDragOver(true)
           }}
+          onDragLeave={() => setRemoveDragOver(false)}
           onDrop={(ev) => {
             ev.preventDefault()
+            setRemoveDragOver(false)
             setRemoveDrag(null)
+            setDropTarget(null)
             void removeAssignment(removeDrag)
           }}
           title="放開以移除此人員"
@@ -713,14 +908,43 @@ export default function Schedule() {
           移除此人員（{empById.get(removeDrag.employee_id)?.name || '?'}・{shiftById.get(removeDrag.shift_code)?.name || removeDrag.shift_code}）
         </div>
       )}
+
+      {/* 自動排班確認彈窗：避免誤觸，確認後才執行 */}
+      {confirmGenerate && (
+        <Modal title="自動排班確認" onClose={() => setConfirmGenerate(false)}>
+          <div className="stack">
+            <p className="modal-lead">
+              確定要執行自動排班？將重新產生 <b>{year}</b> 年 <b>{month}</b> 月的班表，並覆蓋既有排班。
+            </p>
+            <p className="hint">
+              提示：可先用〈批次鎖定〉鎖定不想被更動的日期；已鎖定的天數不會被自動排班變更。
+            </p>
+            <div className="modal__actions">
+              <button type="button" className="btn" onClick={() => setConfirmGenerate(false)}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  setConfirmGenerate(false)
+                  void runGenerate()
+                }}
+              >
+                ⟳ 開始排班
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
 // =============================================================
 // AssignModal —— 人力指派彈窗
-// 顯示某一天某個班別的人員；可新增人員、移除人員、填寫備註。
-// 每次操作都會即時寫入後端（PUT /schedule/assign），同時更新彈窗內的
-// local 狀態；關閉時把 local 回傳給父層更新畫面。
+// 顯示某一天某個班別的人員；可新增人員、移除人員、勾選工作項目、填寫備註。
+// 所有編輯先存在彈窗內的 local 狀態，按下「完成」才比對差異、一次寫入後端，
+// 寫完再關閉並把 local 回傳給父層更新畫面；點「×」或背景關閉則放棄編輯、回復原狀。
 // =============================================================
 function AssignModal({
   year,
@@ -730,6 +954,7 @@ function AssignModal({
   initialEmployeeId,
   shiftTypes,
   employees,
+  workItems,
   assignedDay,
   onClose,
 }: {
@@ -740,6 +965,7 @@ function AssignModal({
   initialEmployeeId?: string
   shiftTypes: ShiftType[]
   employees: Employee[]
+  workItems: WorkItem[]
   assignedDay: Assignment[]
   onClose: (finalLocal: Assignment[]) => void
 }) {
@@ -747,10 +973,10 @@ function AssignModal({
   const [shiftCode, setShiftCode] = useState(initialShiftCode || workTypes[0]?.code || '') // 目前選中的班別
   const [local, setLocal] = useState<Assignment[]>(assignedDay)                            // 這天所有已排班（彈窗內即時維護的副本）
   const [newEmployeeId, setNewEmployeeId] = useState(initialEmployeeId || '')              // 「要新增的人員」下拉選到誰
-  const [busy, setBusy] = useState(false)                                                  // 是否正在送後端
-  const pendingRef = useRef(0)   // 還在進行中的儲存請求數（關閉時要等它們跑完）
-  const localRef = useRef<Assignment[]>(local) // 最新 local 的鏡像，供關閉時的 async 讀取
-  const closingRef = useRef(false) // 避免關閉動作重複觸發
+  const [saving, setSaving] = useState(false)                                              // 是否正在把編輯寫入後端
+  const initialRef = useRef<Assignment[]>(assignedDay) // 開啟時的原始資料（「完成」時比對有哪些異動）
+  const localRef = useRef<Assignment[]>(local)         // 最新 local 的鏡像，供關閉時的 async 讀取
+  const closingRef = useRef(false)                     // 避免儲存中的關閉動作重複觸發
 
   useEffect(() => {
     localRef.current = local
@@ -769,6 +995,28 @@ function AssignModal({
   )
   const draggedEmp = initialEmployeeId ? empById.get(initialEmployeeId) : undefined
 
+  // 把「1,2」逗號分隔的工作項目 id 字串轉成陣列（供勾選框比對）
+  const workItemIdsOf = (raw?: string): string[] =>
+    String(raw || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+
+  // 勾選/取消某位員工的工作項目：只更新彈窗內的 local，「完成」時才送後端。
+  // 儲存用的 id 字串一律依 workItems 排序產生，確保大家存的順序一致
+  const toggleWorkItem = (empId: string, itemId: string) => {
+    const person = local.find((a) => a.shift_code === shiftCode && a.employee_id === empId)
+    if (!person) return
+    const cur = new Set(workItemIdsOf(person.work_item))
+    if (cur.has(itemId)) cur.delete(itemId)
+    else cur.add(itemId)
+    const nextRaw = workItems
+      .filter((w) => cur.has(String(w.id)))
+      .map((w) => String(w.id))
+      .join(',')
+    setLocal((prev) => prev.map((a) => (a.shift_code === shiftCode && a.employee_id === empId ? { ...a, work_item: nextRaw } : a)))
+  }
+
   // 切換班別時：若「要新增的人員」下拉目前選的是「拖曳帶入」的員工則保留，
   // 方便直接加到新選的班別；其餘情況清空，避免把選錯的人誤加到其他班別
   const setShift = (code: string) => {
@@ -776,90 +1024,75 @@ function AssignModal({
     if (newEmployeeId && newEmployeeId !== initialEmployeeId) setNewEmployeeId('')
   }
 
-  // 新增人員：送後端成功後，也同步更新彈窗內的 local 狀態
-  const addPerson = async () => {
-    if (!newEmployeeId || busy) return
-    setBusy(true)
-    pendingRef.current += 1
-    try {
-      await api('/schedule/assign', {
-        method: 'PUT',
-        body: { year, month, day, shift_code: shiftCode, employee_id: newEmployeeId, action: 'add' },
-      })
-      const entry: Assignment = { year, month, day, shift_code: shiftCode, employee_id: newEmployeeId }
-      setLocal((prev) => (prev.some((a) => a.shift_code === shiftCode && a.employee_id === newEmployeeId) ? prev : [...prev, entry]))
-      setNewEmployeeId('')
-    } catch (e) {
-      toast((e as Error).message, 'error')
-    } finally {
-      pendingRef.current -= 1
-      setBusy(false)
-    }
+  // 新增人員：只加入彈窗內的 local，「完成」時才送後端
+  const addPerson = () => {
+    if (!newEmployeeId) return
+    const entry: Assignment = { year, month, day, shift_code: shiftCode, employee_id: newEmployeeId }
+    setLocal((prev) => (prev.some((a) => a.shift_code === shiftCode && a.employee_id === newEmployeeId) ? prev : [...prev, entry]))
+    setNewEmployeeId('')
   }
 
-  // 移除人員：送後端成功後更新 local
-  const removePerson = async (empId: string) => {
-    if (busy) return
-    setBusy(true)
-    pendingRef.current += 1
-    try {
-      await api('/schedule/assign', {
-        method: 'PUT',
-        body: { year, month, day, shift_code: shiftCode, employee_id: empId, action: 'remove' },
-      })
-      const next = local.filter((a) => !(a.shift_code === shiftCode && a.employee_id === empId))
-      setLocal(next)
-    } catch (e) {
-      toast((e as Error).message, 'error')
-    } finally {
-      pendingRef.current -= 1
-      setBusy(false)
-    }
+  // 移除人員：只從彈窗內的 local 移除，「完成」時才送後端
+  const removePerson = (empId: string) => {
+    setLocal((prev) => prev.filter((a) => !(a.shift_code === shiftCode && a.employee_id === empId)))
   }
 
-  // 輸入框打字的同時，先把備註更新到 local（即時顯示）；真正儲存交給 saveNote
+  // 輸入框打字的同時更新備註到 local（即時顯示）
   const updateNoteLocal = (empId: string, note: string) => {
     setLocal((prev) => prev.map((a) => (a.shift_code === shiftCode && a.employee_id === empId ? { ...a, note } : a)))
   }
 
-  // 備註儲存：離開輸入框（blur）時自動送後端
-  const saveNote = async (empId: string, note: string) => {
-    if (busy) return
-    setBusy(true)
-    pendingRef.current += 1
-    try {
-      await api('/schedule/assign', {
-        method: 'PUT',
-        body: { year, month, day, shift_code: shiftCode, employee_id: empId, action: 'add', note },
-      })
-      const next = local.map((a) => (a.shift_code === shiftCode && a.employee_id === empId ? { ...a, note } : a))
-      setLocal(next)
-    } catch (e) {
-      toast((e as Error).message, 'error')
-    } finally {
-      pendingRef.current -= 1
-      setBusy(false)
-    }
+  // 同一人日的唯一鍵（每人每天只會在一班）
+  const keyOf = (a: Assignment) => `${a.shift_code}:${a.employee_id}`
+
+  // 關閉（× 或點背景）：放棄未儲存的編輯，回復成開啟時的原始資料，不送後端
+  const handleCancel = () => {
+    if (closingRef.current) return
+    closingRef.current = true
+    onClose(initialRef.current)
   }
 
-  // 關閉：先觸發備註輸入框的 blur 儲存，等所有進行中的請求完成後，把 local 結果回傳給父層
+  // 儲存：比對「開啟時的資料」與「編輯後的資料」，差異統一拍送後端；成功才關閉
   const handleDone = () => {
     if (closingRef.current) return
     closingRef.current = true
-    const active = document.activeElement
-    if (active instanceof HTMLInputElement && active.classList.contains('assign-note')) {
-      active.blur()
-    }
+    setSaving(true)
     void (async () => {
-      while (pendingRef.current > 0) {
-        await new Promise((r) => setTimeout(r, 80))
+      const initial = initialRef.current
+      const current = localRef.current
+      const initialMap = new Map(initial.map((a) => [keyOf(a), a]))
+      const currentMap = new Map(current.map((a) => [keyOf(a), a]))
+      const removed = initial.filter((a) => !currentMap.has(keyOf(a))) // 被刪掉的人員
+      const upserts: Assignment[] = []                                 // 新增或備註/工作項目有變動的人員
+      for (const a of current) {
+        const prev = initialMap.get(keyOf(a))
+        if (!prev || prev.note !== a.note || prev.work_item !== a.work_item) upserts.push(a)
       }
-      onClose(localRef.current)
+      try {
+        for (const a of removed) {
+          await api('/schedule/assign', {
+            method: 'PUT',
+            body: { year, month, day, shift_code: a.shift_code, employee_id: a.employee_id, action: 'remove' },
+          })
+        }
+        for (const a of upserts) {
+          await api('/schedule/assign', {
+            method: 'PUT',
+            body: { year, month, day, shift_code: a.shift_code, employee_id: a.employee_id, action: 'add', note: a.note || '', work_item: a.work_item || '' },
+          })
+        }
+        onClose(current)
+      } catch (e) {
+        // 儲存失敗：留在彈窗內讓使用者重試，不關閉
+        toast((e as Error).message, 'error')
+        closingRef.current = false
+        setSaving(false)
+      }
     })()
   }
 
   return (
-    <Modal title={`${month} 月 ${day} 日・${draggedEmp ? `加入「${draggedEmp.name}」` : '人力指派'}`} onClose={handleDone}>
+    <Modal title={`${month} 月 ${day} 日・${draggedEmp ? `加入「${draggedEmp.name}」` : '人力指派'}`} onClose={handleCancel}>
       <div className="stack">
         {draggedEmp && (
           <p className="assign-target">
@@ -882,20 +1115,41 @@ function AssignModal({
           {/* 目前班別下的人員列：姓名 + 備註輸入框 + 移除按鈕 */}
           {people.map((p) => {
             const emp = empById.get(p.employee_id)
+            const empSkills = new Set((emp?.skills || []).map((s) => String(s.id)))
             return (
               <div key={p.employee_id} className="assign-person">
                 <span className="assign-person__name">{emp?.name || '未知員工'}</span>
+                <div className="assign-person__wis">
+                  {workItems.map((w) => {
+                    const on = workItemIdsOf(p.work_item).includes(String(w.id))
+                    const allowed = empSkills.has(String(w.id))
+                    return (
+                      <label
+                        key={w.id}
+                        className={`assign-wi ${on ? 'assign-wi--on' : ''} ${allowed ? '' : 'assign-wi--disabled'}`}
+                        title={allowed ? `勾選：${w.name}` : `此員工無「${w.name}」技能，無法勾選`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={saving || !allowed}
+                          onChange={() => toggleWorkItem(p.employee_id, String(w.id))}
+                        />
+                        <span>
+                          {w.icon} {w.name}
+                        </span>
+                      </label>
+                    )
+                  })}
+                  {workItems.length === 0 && <span className="muted">（尚未設定任何工作項目）</span>}
+                </div>
                 <input
                   className="assign-note"
                   value={p.note || ''}
                   placeholder="備註"
                   onChange={(e) => updateNoteLocal(p.employee_id, e.target.value)}
-                  onBlur={(e) => void saveNote(p.employee_id, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                  }}
                 />
-                <button type="button" className="btn btn--danger" disabled={busy} onClick={() => removePerson(p.employee_id)}>
+                <button type="button" className="btn btn--danger" disabled={saving} onClick={() => removePerson(p.employee_id)}>
                   移除
                 </button>
               </div>
@@ -911,16 +1165,19 @@ function AssignModal({
               </option>
             ))}
           </select>
-          <button type="button" className="btn btn--primary" disabled={busy || !newEmployeeId} onClick={addPerson}>
+          <button type="button" className="btn btn--primary" disabled={saving || !newEmployeeId} onClick={addPerson}>
             新增人員
           </button>
         </div>
         <p className="hint">
-          每位員工可填寫當天排班備註，會顯示在班表姓名後方（離開輸入框即自動儲存）。同一員工當天只會排一個班別；同一班別可安排多人，手動指派不受人數上限限制（上限僅套用於自動排班）。
+          勾選工作項目、填寫備註後按「儲存」一次寫入；按「關閉」放棄編輯、回復原狀。每人每天只排一個班別。
         </p>
         <div className="modal__actions">
-          <button type="button" className="btn" onClick={handleDone}>
-            完成
+          <button type="button" className="btn" disabled={saving} onClick={handleCancel}>
+            關閉
+          </button>
+          <button type="button" className="btn btn--primary" disabled={saving} onClick={handleDone}>
+            {saving ? '儲存中…' : '儲存'}
           </button>
         </div>
       </div>

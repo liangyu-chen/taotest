@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { readTable, replaceRows, appendRows, TABLES } from '../sheets.js'
+import { readTable, replaceRows, appendRows, deleteWhere, upsertRow, TABLES } from '../storage.js'
 import { requireAuth, requireAdmin } from '../auth.js'
 import { generateSchedule } from '../scheduler.js'
 
@@ -58,18 +58,14 @@ router.put('/availability', requireAuth, async (req, res, next) => {
       start_time = ''
       end_time = ''
     }
-    const rows = await readTable('availability')
-    const idx = rows.findIndex((r) => r.employee_id === employee_id && r.date === date)
-    const headers = TABLES.availability
-    if (idx >= 0) {
-      rows[idx].status = status
-      rows[idx].note = note
-      rows[idx].start_time = start_time
-      rows[idx].end_time = end_time
-    } else {
-      rows.push({ employee_id, date, status, note, start_time, end_time })
-    }
-    await replaceRows('availability', [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ''))])
+    await upsertRow('availability', ['employee_id', 'date'], {
+      employee_id,
+      date,
+      status,
+      note,
+      start_time,
+      end_time,
+    })
     res.json({ ok: true })
   } catch (e) {
     next(e)
@@ -83,13 +79,7 @@ router.delete('/availability', requireAuth, async (req, res, next) => {
     if (req.user.role !== 'admin' && (await currentEmployeeId(req)) !== String(employee_id)) {
       return res.status(403).json({ error: '只能設定自己的排休偏好' })
     }
-    const rows = await readTable('availability')
-    const idx = rows.findIndex((r) => r.employee_id === String(employee_id) && r.date === String(date))
-    if (idx >= 0) {
-      rows.splice(idx, 1)
-      const headers = TABLES.availability
-      await replaceRows('availability', [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ''))])
-    }
+    await deleteWhere('availability', { employee_id: String(employee_id), date: String(date) })
     res.json({ ok: true })
   } catch (e) {
     next(e)
@@ -109,8 +99,48 @@ router.get('/schedule', requireAuth, async (req, res, next) => {
         shift_code: a.shift_code,
         employee_id: String(a.employee_id),
         note: a.note || '',
+        work_item: a.work_item || '',
       }))
     res.json({ assignments })
+  } catch (e) {
+    next(e)
+  }
+})
+
+router.get('/schedule/locks', requireAuth, async (req, res, next) => {
+  try {
+    const { y, m } = monthBounds(req.query.year, req.query.month)
+    const rows = await readTable('schedule_locks')
+    const lockedDays = rows
+      .filter((r) => Number(r.year) === y && Number(r.month) === m)
+      .map((r) => Number(r.day))
+      .sort((a, b) => a - b)
+    res.json({ lockedDays })
+  } catch (e) {
+    next(e)
+  }
+})
+
+router.put('/schedule/locks', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const { y, m } = monthBounds(req.body.year, req.body.month)
+    const days = Array.isArray(req.body.days)
+      ? [...new Set(req.body.days.map(Number).filter((d) => Number.isInteger(d) && d >= 1 && d <= 31))]
+      : []
+    const locked = req.body.locked !== false
+    let rows = await readTable('schedule_locks')
+    const headers = TABLES.schedule_locks
+    if (locked) {
+      const existing = new Set(rows.filter((r) => Number(r.year) === y && Number(r.month) === m).map((r) => Number(r.day)))
+      const missing = days.filter((d) => !existing.has(d))
+      if (missing.length) {
+        await appendRows('schedule_locks', missing.map((d) => [String(y), String(m), String(d)]))
+      }
+    } else {
+      const remaining = rows.filter((r) => !(Number(r.year) === y && Number(r.month) === m && days.includes(Number(r.day))))
+      await replaceRows('schedule_locks', [headers, ...remaining.map((r) => headers.map((h) => r[h] ?? ''))])
+    }
+    res.json({ ok: true })
   } catch (e) {
     next(e)
   }
@@ -119,27 +149,51 @@ router.get('/schedule', requireAuth, async (req, res, next) => {
 router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { y, m } = monthBounds(req.body.year, req.body.month)
-    const [employees, shiftTypes, headcounts, availability, settings] = await Promise.all([
-      readTable('employees'),
-      readTable('shift_types'),
-      readTable('headcounts'),
-      readTable('availability'),
-      readTable('settings'),
-    ])
-    const result = generateSchedule({ year: y, month: m, employees, shiftTypes, headcounts, availability, settings })
+    const [employees, shiftTypes, headcounts, availability, settings, lockRows, wi, employeeSkills] =
+      await Promise.all([
+        readTable('employees'),
+        readTable('shift_types'),
+        readTable('headcounts'),
+        readTable('availability'),
+        readTable('settings'),
+        readTable('schedule_locks'),
+        readTable('work_items'),
+        readTable('employee_skills'),
+      ])
+    // 工作項目依 sort 排序，讓分配與存檔的圖示順序一致（吧台在前、內場在後）
+    const workItems = wi.sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0))
+    // 已鎖定的日期：自動排班完全保留原狀，不新增、不修改、不移除
+    const lockedDays = new Set(
+      lockRows.filter((r) => Number(r.year) === y && Number(r.month) === m).map((r) => Number(r.day)),
+    )
+    const result = generateSchedule({
+      year: y,
+      month: m,
+      employees,
+      shiftTypes,
+      headcounts,
+      availability,
+      settings,
+      workItems,
+      employeeSkills,
+    })
 
     const headers = TABLES.schedule
-    const keep = (await readTable('schedule')).filter(
-      (a) => !(Number(a.year) === y && Number(a.month) === m),
-    )
-    const newRows = result.assignments.map((a) => [
-      String(a.year),
-      String(a.month),
-      String(a.day),
-      a.shift_code,
-      String(a.employee_id),
-      a.note || '',
-    ])
+    const existing = await readTable('schedule')
+    // 保留「非本月」的舊資料 + 「本月但已鎖定」的既有排班
+    const keep = existing.filter((a) => !(Number(a.year) === y && Number(a.month) === m) || lockedDays.has(Number(a.day)))
+    // 自動排班的結果排除已鎖定日期（那些日期維持原狀）
+    const newRows = result.assignments
+      .filter((a) => !lockedDays.has(a.day))
+      .map((a) => [
+        String(a.year),
+        String(a.month),
+        String(a.day),
+        a.shift_code,
+        String(a.employee_id),
+        a.note || '',
+        a.work_item || '',
+      ])
     const rows = [
       headers,
       ...keep.map((r) => headers.map((h) => r[h] ?? '')),
@@ -147,6 +201,7 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
     ]
     await replaceRows('schedule', rows)
 
+    result.unfilled = result.unfilled.filter((u) => !lockedDays.has(u.day))
     res.json(result)
   } catch (e) {
     next(e)
@@ -155,39 +210,29 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
 
 router.put('/schedule/assign', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const { year, month, day, shift_code, employee_id, action, note } = req.body || {}
+    const { year, month, day, shift_code, employee_id, action, note, work_item } = req.body || {}
     if (!year || !month || !day || !shift_code) return res.status(400).json({ error: '參數不足' })
-    let rows = await readTable('schedule')
-    const headers = TABLES.schedule
-    const same = (r) =>
-      Number(r.year) === Number(year) &&
-      Number(r.month) === Number(month) &&
-      Number(r.day) === Number(day) &&
-      r.shift_code === String(shift_code)
+    const y = String(year)
+    const m = String(month)
+    const d = String(day)
+    const sc = String(shift_code)
+    // 後端防線：已鎖定的日期不可新增/修改/移除排班
+    const lockRows = await readTable('schedule_locks')
+    const isLocked = lockRows.some((r) => Number(r.year) === Number(y) && Number(r.month) === Number(m) && Number(r.day) === Number(d))
+    if (isLocked) return res.status(409).json({ error: `此日（${Number(m)}/${Number(d)}）已鎖定，無法更動排班` })
     const isAdd = action !== 'remove'
     if (isAdd) {
       if (!employee_id) return res.status(400).json({ error: '請選擇人員' })
-      const key = String(employee_id)
-      const idx = rows.findIndex((r) => same(r) && String(r.employee_id) === key)
-      if (idx >= 0) {
-        if (note !== undefined) rows[idx].note = note
-      } else {
-        rows.push({
-          year: String(year),
-          month: String(month),
-          day: String(day),
-          shift_code: String(shift_code),
-          employee_id: key,
-          note: note || '',
-        })
-      }
+      // UPSERT：存在就更新備註/工作項目、不存在就新增，單一 SQL 搞定
+      const upsert = { year: y, month: m, day: d, shift_code: sc, employee_id: String(employee_id) }
+      if (note !== undefined) upsert.note = note || ''
+      if (work_item !== undefined) upsert.work_item = work_item || ''
+      await upsertRow('schedule', ['year', 'month', 'day', 'shift_code', 'employee_id'], upsert)
     } else if (employee_id) {
-      const key = String(employee_id)
-      rows = rows.filter((r) => !(same(r) && String(r.employee_id) === key))
+      await deleteWhere('schedule', { year: y, month: m, day: d, shift_code: sc, employee_id: String(employee_id) })
     } else {
-      rows = rows.filter((r) => !same(r))
+      await deleteWhere('schedule', { year: y, month: m, day: d, shift_code: sc })
     }
-    await replaceRows('schedule', [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ''))])
     res.json({ ok: true })
   } catch (e) {
     next(e)

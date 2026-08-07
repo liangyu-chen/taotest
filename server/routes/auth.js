@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
-import { readTable, appendRows, replaceRows, nextId } from '../sheets.js'
+import { readTable, appendRows, replaceRows, nextId } from '../storage.js'
 import { signToken, requireAuth, toPublicUser } from '../auth.js'
 
 const router = Router()

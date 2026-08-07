@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import express from 'express'
 import cors from 'cors'
 import { PORT } from './config.js'
-import { initSpreadsheet } from './sheets.js'
+import { initDatabase } from './storage.js'
 import authRoutes from './routes/auth.js'
 import dataRoutes from './routes/data.js'
 import scheduleRoutes from './routes/schedule.js'
@@ -42,7 +42,7 @@ app.use((err, _req, res, _next) => {
 })
 
 async function start() {
-  await initSpreadsheet()
+  await initDatabase()
   app.listen(PORT, () => {
     console.log('')
     console.log('  排班排程系統已啟動')

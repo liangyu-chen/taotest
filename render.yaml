@@ -1,7 +1,7 @@
 # Render Blueprint：一鍵部署「排班排程系統」
 # 使用方式：Render 儀表板 → New → Blueprint → 選這個 GitHub repo，
-# 系統會自動依本檔建立服務，再把 GOOGLE_* 與 ADMIN_PASSWORD 的值填進
-# 「Environment」區即可（JWT_SECRET 會自動產生）。
+# 系統會自動依本檔建立服務，再把 DATABASE_URL（Neon 連接字串）與
+# ADMIN_PASSWORD 的值填進「Environment」區即可（JWT_SECRET 會自動產生）。
 services:
   - type: web
     name: taotest
@@ -16,10 +16,8 @@ services:
         value: 20
       - key: JWT_SECRET
         generateValue: true
-      # 以下三個值請在 Render 的 Environment 頁面手動填入（sync: false 表示部署時會提示你補）
+      # 以下兩個值請在 Render 的 Environment 頁面手動填入（sync: false 表示部署時會提示你補）
+      - key: DATABASE_URL
+        sync: false
       - key: ADMIN_PASSWORD
-        sync: false
-      - key: GOOGLE_SPREADSHEET_ID
-        sync: false
-      - key: GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false

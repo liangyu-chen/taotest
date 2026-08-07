@@ -5,7 +5,7 @@ import { Modal, Field, Spinner, toast } from '../components/ui'
 
 // =============================================================
 // ShiftTypes.tsx —— 班別與人力需求（管理員）
-// 上半：班別清單（新增/編輯/刪除班別，含代碼、時段、顏色、排序）。
+// 上半：班別清單（新增/編輯/刪除班別，含代碼、時段、排序）。
 // 下半：每日人力需求表——每個班別在 平日/週末/例假日 各需要幾人
 //       （設 0 表示那天不開班）。自動排班會依照這裡的需求來填人。
 // =============================================================
@@ -104,7 +104,6 @@ export default function ShiftTypes() {
                   <th>班別</th>
                   <th>代碼</th>
                   <th>起訖時間</th>
-                  <th>顏色</th>
                   <th>排序</th>
                   <th className="table__actions">操作</th>
                 </tr>
@@ -112,26 +111,15 @@ export default function ShiftTypes() {
               <tbody>
                 {shifts.map((row) => (
                   <tr key={row.id}>
-                    <td className="table__strong">
-                      <i className="swatch" style={{ background: row.color }} />
-                      {row.name}
-                    </td>
+                    <td className="table__strong">{row.name}</td>
                     <td>{row.code}</td>
                     <td>{row.start_time ? `${row.start_time}–${row.end_time || '次日'}` : '—'}</td>
-                    <td>
-                      <code className="color-code">{row.color}</code>
-                    </td>
                     <td>{row.sort}</td>
                     <td className="table__actions">
                       <button type="button" className="btn btn--small" onClick={() => setEditing(row)}>
                         編輯
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn--small btn--danger"
-                        disabled={row.code === 'OFF'}
-                        onClick={() => void remove(row)}
-                      >
+                      <button type="button" className="btn btn--small btn--danger" onClick={() => void remove(row)}>
                         刪除
                       </button>
                     </td>
@@ -163,10 +151,7 @@ export default function ShiftTypes() {
                 <tbody>
                   {workShifts.map((s) => (
                     <tr key={s.code}>
-                      <td className="table__strong">
-                        <i className="swatch" style={{ background: s.color }} />
-                        {s.name}
-                      </td>
+                      <td className="table__strong">{s.name}</td>
                       {DAY_TYPES.map((dt) => (
                         <td key={dt.value}>
                           <input
@@ -211,9 +196,7 @@ export default function ShiftTypes() {
   )
 }
 
-const PRESET_COLORS = ['#b45309', '#1d4ed8', '#6d28d9', '#16a34a', '#c026d3', '#0891b2', '#dc2626', '#4b5563']
-
-// 新增/編輯班別彈窗。OFF 是「休」的保留班別，不可刪除、不可改排序
+// 新增/編輯班別彈窗
 function ShiftModal({
   shift,
   onClose,
@@ -227,7 +210,6 @@ function ShiftModal({
   const [code, setCode] = useState(shift?.code || '')
   const [start, setStart] = useState(shift?.start_time || '')
   const [end, setEnd] = useState(shift?.end_time || '')
-  const [color, setColor] = useState(shift?.color || PRESET_COLORS[1])
   const [sort, setSort] = useState(shift?.sort || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -240,7 +222,7 @@ function ShiftModal({
     setBusy(true)
     setError('')
     try {
-      const body = { name: name.trim(), code: code.trim(), start_time: start, end_time: end, color, sort }
+      const body = { name: name.trim(), code: code.trim(), start_time: start, end_time: end, sort }
       if (shift) {
         await api(`/shift-types/${shift.id}`, { method: 'PUT', body })
       } else {
@@ -271,25 +253,9 @@ function ShiftModal({
             <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
           </Field>
         </div>
-        <Field label="顯示顏色">
-          <div className="color-picker">
-            {PRESET_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={`color-swatch${color === c ? ' color-swatch--active' : ''}`}
-                style={{ background: c }}
-                onClick={() => setColor(c)}
-                aria-label={c}
-              />
-            ))}
-          </div>
+        <Field label="排序（數字越小越先排）">
+          <input type="number" value={sort} onChange={(e) => setSort(e.target.value)} />
         </Field>
-        {shift?.code !== 'OFF' && (
-          <Field label="排序（數字越小越先排）">
-            <input type="number" value={sort} onChange={(e) => setSort(e.target.value)} />
-          </Field>
-        )}
         {error && <p className="form-error">{error}</p>}
         <div className="modal__actions">
           <button type="button" className="btn" onClick={onClose}>

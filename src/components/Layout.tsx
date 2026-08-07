@@ -32,6 +32,7 @@ const TITLES: Record<string, string> = {
   '/availability': '排休與時段',
   '/employees': '員工管理',
   '/shifts': '班別與人力設定',
+  '/work-items': '工作項目',
   '/users': '帳號管理',
   '/settings': '排班規則設定',
 }
@@ -81,6 +82,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { to: '/availability', label: '排休與時段', icon: '☼', adminOnly: false },
     { to: '/employees', label: '員工管理', icon: '☷', adminOnly: true },
     { to: '/shifts', label: '班別與人力', icon: '⌛', adminOnly: true },
+    { to: '/work-items', label: '工作項目', icon: '☑', adminOnly: true },
     { to: '/settings', label: '排班規則', icon: '⚙', adminOnly: true },
     { to: '/users', label: '帳號管理', icon: '⚿', adminOnly: true },
   ].filter((item) => !item.adminOnly || isAdmin)

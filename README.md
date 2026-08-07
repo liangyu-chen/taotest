@@ -1,10 +1,10 @@
 # 排班排程系統
 
-以 Google 試算表當作資料庫的自動排班系統，包含帳號密碼登入、後台管理與自動產生員工班表。
+自動排班系統，包含帳號密碼登入、後台管理與自動產生員工班表。
 
 - 前端：React + Vite + TypeScript
 - 後端：Node.js + Express
-- 資料庫：Google Sheets API（服務帳號）
+- 資料庫：Neon（PostgreSQL）
 
 ## 功能
 
@@ -27,6 +27,14 @@
 4. **例假日**（〈排班規則設定〉）：填寫日期後，該日會以「例假日」的人力需求排班。
 5. 自動排班時，會依每人「目標時數」的比例平均分配班次，避免有人過忙。
 
+### 鎖定日期
+
+在〈班表總覽〉點選日期格子（可多選），再用上方「🔒 鎖定所選」鎖定。鎖定的日期：
+
+- 自動排班完全不會更動該日班表（保留、不新增、不移除）
+- 管理員也無法手動增刪人員（「＋」與拖曳都會停用），需先解鎖才能編輯
+- 格子右上角有 🔒 / 🔓 圖示可單日切換
+
 ## 快速開始
 
 ### 1. 安裝套件
@@ -35,25 +43,20 @@
 npm install
 ```
 
-### 2. 建立 Google 試算表並開放 API
+### 2. 建立 Neon 資料庫
 
-1. 到 [Google Cloud Console](https://console.cloud.google.com/) 建立一個專案（或使用現有專案）。
-2. 左側「API 和服務」→「程式庫」，搜尋 **Google Sheets API** 並「啟用」。
-3. 「API 和服務」→「憑證」→「＋建立憑證」→「**服務帳戶**」，建立後複製它的**電子郵件地址**（格式類似 `xxx@xxx.iam.gserviceaccount.com`）。
-4. 點該服務帳戶 →「金鑰」→「新增金鑰」→「JSON」，下載憑證檔，**重新命名為 `service-account.json`** 並放到本專案根目錄。
-5. 到 [Google 試算表](https://sheets.new/) 建立一份空白試算表。
-6. 點試算表右上角「共用」→ 把**服務帳戶的電子郵件**加入為「**編輯者**」。
-7. 從試算表網址中複製 **試算表 ID**（`https://docs.google.com/spreadsheets/d/` 後面、`/edit` 前面的字串）。
+1. 到 [Neon](https://neon.tech) 建立一個免費專案。
+2. 在專案 → **Connect** → **Connection string** 複製連接字串（`postgresql://...`）。
+3. 填進 `.env` 的 `DATABASE_URL`。
 
-> 首次啟動時，系統會自動在試算表建立以下工作表：`users`、`employees`、`shift_types`、`headcounts`、`availability`、`schedule`，並寫入預設管理員與班別，不需要手動建表。
+> 首次啟動時，系統會自動建表並寫入預設管理員與班別，不需要手動建表。
 
 ### 3. 設定環境變數
 
 複製 `.env.example` 為 `.env` 並填入：
 
 ```
-GOOGLE_SPREADSHEET_ID=你的試算表ID
-GOOGLE_CREDENTIALS_FILE=service-account.json
+DATABASE_URL=postgresql://user:password@host/database?sslmode=verify-full
 JWT_SECRET=請改成一長串隨機文字
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
@@ -92,6 +95,5 @@ npm start
 ## 部署注意事項
 
 - 正式上線請務必修改 `JWT_SECRET`，並透過 HTTPS 傳輸。
-- 目前登入密碼以 bcrypt 雜湊儲存在試算表 `users` 工作表。
-- Google Sheets 有速率上限（每 100 秒約 60 次要求），因此每次修改都會整表寫入。若人數成長很多，建議改用 MySQL / SQLite。
-- `service-account.json` 與 `.env` 已加入 `.gitignore`，請勿上傳到公開儲存庫。
+- 目前登入密碼以 bcrypt 雜湊儲存在 Neon `users` 表。
+- `.env` 已加入 `.gitignore`，請勿上傳到公開儲存庫。

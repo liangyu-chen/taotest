@@ -38,6 +38,8 @@ function settingsMap(settings) {
  * - 正職目標＝平日天數×每班時數；工讀無每週時數上限，目標＝每班時數×當月天數
  * - 依各員工「目標時數」比例分配，公平且尊重排休 / 可空出與沒空時段 / 連續上班上限
  * - 有「偏好班別」的員工在該日優先排入偏好班別（在公平分配之前先處理）
+ * - 工作項目（吧台/內場…）：每個有需求人數的班別都要「每個工作項目至少一人負責」，
+ *   選人時優先挑具備尚未被覆蓋技能的人；單人班別會優先找能同時勝任所有工作項目的人
  *
  * @param {object} options
  * @param {number} options.year
@@ -47,8 +49,10 @@ function settingsMap(settings) {
  * @param {Array} options.headcounts  人力需求 [{shift_code, day_type, count}]
  * @param {Array} options.availability 排休/偏好 [{employee_id, date, status}]
  * @param {Array} options.settings    排班規則 [{key, value}]
+ * @param {Array} options.workItems   工作項目 [{id, name, icon}]（每班需各至少一人負責）
+ * @param {Array} options.employeeSkills 員工技能 [{employee_id, work_item_id}]
  */
-export function generateSchedule({ year, month, employees, shiftTypes, headcounts, availability, settings }) {
+export function generateSchedule({ year, month, employees, shiftTypes, headcounts, availability, settings, workItems = [], employeeSkills = [] }) {
   const cfg = settingsMap(settings)
   const fulltimeShiftHours = toNum(cfg.fulltime_shift_hours, 8)
   const parttimeShiftHours = toNum(cfg.parttime_shift_hours, 6)
@@ -134,6 +138,37 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     codeCount[emp.id] = {}
   }
 
+  // —— 工作項目（吧台/內場…）相關狀態 ——
+  const skillsByEmp = new Map() // empId → Set<workItemId>
+  for (const s of employeeSkills) {
+    if (!s.employee_id || !s.work_item_id) continue
+    const set = skillsByEmp.get(String(s.employee_id))
+    if (set) set.add(String(s.work_item_id))
+    else skillsByEmp.set(String(s.employee_id), new Set([String(s.work_item_id)]))
+  }
+  const workItemIds = workItems.map((w) => String(w.id)).filter(Boolean)
+  const shiftPeople = new Map() // `${day}:${shiftCode}` → empId[]（該班已排入的人）
+  const coveredByShift = new Map() // `${day}:${shiftCode}` → Set<workItemId>（已被具備技能者覆蓋的工作項目）
+  function shiftGroupKey(dayNum, shiftCode) {
+    return `${dayNum}:${shiftCode}`
+  }
+  function markCovered(dayNum, shiftCode, empId) {
+    const sks = skillsByEmp.get(String(empId))
+    if (!sks || sks.size === 0) return
+    const key = shiftGroupKey(dayNum, shiftCode)
+    const set = coveredByShift.get(key)
+    if (set) {
+      for (const id of sks) set.add(id)
+    } else {
+      coveredByShift.set(key, new Set(sks))
+    }
+  }
+  function uncoveredFor(dayNum, shiftCode) {
+    const covered = coveredByShift.get(shiftGroupKey(dayNum, shiftCode))
+    if (!covered) return new Set(workItemIds)
+    return new Set(workItemIds.filter((id) => !covered.has(id)))
+  }
+
   function consecutiveDaysBefore(empId, dayNum) {
     let streak = 0
     for (let d = dayNum - 1; d >= 1; d--) {
@@ -149,13 +184,22 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     return consecutiveDaysBefore(empId, dayNum) >= maxConsecutive
   }
 
-  function score(empId, shiftCode, dayNum, index) {
+  function score(empId, shiftCode, dayNum, index, uncovered) {
     let s = 0
     s += (hoursDone[empId] / Math.max(1, targetHours[empId])) * 1000
     s += (codeCount[empId][shiftCode] || 0) * 3
     const streak = consecutiveDaysBefore(empId, dayNum)
     s += streak * streak * 25
     if (preferMap[`${empId}:${dateKey(year, month, dayNum)}`] === shiftCode) s -= 500
+    // 具備「尚未被覆蓋的工作項目」技能者優先（讓每班吧台/內場都有人負責）
+    if (uncovered && uncovered.size) {
+      const sks = skillsByEmp.get(String(empId))
+      if (sks && sks.size) {
+        let hits = 0
+        for (const w of uncovered) if (sks.has(w)) hits++
+        if (hits > 0) s -= 200 * hits
+      }
+    }
     s += index * 0.001
     return s
   }
@@ -172,6 +216,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
       const need = headcountMap[`${shift.code}:${type}`]
       if (!need) continue
       const dkey = dateKey(year, month, day)
+      const uncovered = uncoveredFor(day, shift.code)
       const prefs = activeEmployees
         .filter((emp) => {
           if (usedToday.has(emp.id)) return false
@@ -179,7 +224,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
           if (preferMap[`${emp.id}:${dkey}`] !== shift.code) return false
           return canWork(emp.id, day, shift)
         })
-        .sort((a, b) => score(a.id, shift.code, day, 0) - score(b.id, shift.code, day, 0))
+        .sort((a, b) => score(a.id, shift.code, day, 0, uncovered) - score(b.id, shift.code, day, 0, uncovered))
       let filled = 0
       for (const emp of prefs) {
         if (filled >= need) break
@@ -188,6 +233,8 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         assigned.set(key, shift.code)
         hoursDone[emp.id] += hoursPerShift[emp.id]
         codeCount[emp.id][shift.code] = (codeCount[emp.id][shift.code] || 0) + 1
+        ;(shiftPeople.get(shiftGroupKey(day, shift.code)) || shiftPeople.set(shiftGroupKey(day, shift.code), []).get(shiftGroupKey(day, shift.code))).push(emp.id)
+        markCovered(day, shift.code, emp.id)
         filled++
       }
       if (filled) assignedToday[shift.code] = filled
@@ -198,6 +245,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
       const need = headcountMap[`${shift.code}:${type}`]
       if (!need) continue
       for (let slot = assignedToday[shift.code] || 0; slot < need; slot++) {
+        const uncovered = uncoveredFor(day, shift.code)
         const candidates = activeEmployees.filter((emp) => {
           if (usedToday.has(emp.id)) return false
           if (overConsecutive(emp.id, day)) return false
@@ -207,13 +255,42 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
           unfilled.push({ day, shift_code: shift.code })
           continue
         }
-        let best = candidates[0]
+        // 該班還有未覆蓋的工作項目時，優先從「能補上缺漏技能」的人裡選，
+        // 避免同班都是同技能、導致吧台/內場沒人負責；真的找不到才退回全部人選
+        let pool = candidates
+        if (uncovered && uncovered.size) {
+          const coverers = candidates.filter((emp) => {
+            const sks = skillsByEmp.get(String(emp.id))
+            if (!sks || sks.size === 0) return false
+            for (const w of uncovered) if (sks.has(w)) return true
+            return false
+          })
+          if (coverers.length > 0) {
+            // 剩餘人數不足以讓每個未覆蓋項目都有人負責時（例：單人班卻要顧吧台+內場），
+            // 硬性優先選「能覆蓋最多項目」的人——否則明明有雙技能員工，卻因挑單技能者而留下缺漏
+            const remainingSlots = need - slot
+            if (remainingSlots <= uncovered.size) {
+              let maxCov = 0
+              const covCount = (emp) => {
+                const sks = skillsByEmp.get(String(emp.id))
+                let c = 0
+                if (sks) for (const w of uncovered) if (sks.has(w)) c++
+                return c
+              }
+              for (const emp of coverers) if (covCount(emp) > maxCov) maxCov = covCount(emp)
+              pool = coverers.filter((emp) => covCount(emp) === maxCov)
+            } else {
+              pool = coverers
+            }
+          }
+        }
+        let best = pool[0]
         let bestScore = Infinity
-        for (let i = 0; i < candidates.length; i++) {
-          const s = score(candidates[i].id, shift.code, day, i)
+        for (let i = 0; i < pool.length; i++) {
+          const s = score(pool[i].id, shift.code, day, i, uncovered)
           if (s < bestScore) {
             bestScore = s
-            best = candidates[i]
+            best = pool[i]
           }
         }
         usedToday.add(best.id)
@@ -221,6 +298,31 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         assigned.set(key, shift.code)
         hoursDone[best.id] += hoursPerShift[best.id]
         codeCount[best.id][shift.code] = (codeCount[best.id][shift.code] || 0) + 1
+        ;(shiftPeople.get(shiftGroupKey(day, shift.code)) || shiftPeople.set(shiftGroupKey(day, shift.code), []).get(shiftGroupKey(day, shift.code))).push(best.id)
+        markCovered(day, shift.code, best.id)
+      }
+    }
+  }
+
+  // 工作項目分配：每個班別內，依員工技能把工作項目分給負責的人；
+  // 若該工作項目無人具備技能，則視為「未被滿足」加入 unfilled
+  const workItemByKey = new Map() // `${empId}:${date}` → work_item_id[]（單日單班，所以以人日為鍵）
+  for (const [groupKey, people] of shiftPeople) {
+    const byEmp = distributeWorkItems(people, workItems, skillsByEmp)
+    for (const empId of people) {
+      const key = `${empId}:${dateKey(year, month, Number(groupKey.split(':')[0]))}`
+      const ids = byEmp[empId] || []
+      if (ids.length) workItemByKey.set(key, ids)
+    }
+    // 檢查是否有工作項目未被滿足
+    for (const w of workItems) {
+      const any = people.some((id) => {
+        const sks = skillsByEmp.get(String(id))
+        return sks && sks.has(String(w.id))
+      })
+      if (!any) {
+        const [dayNum, shiftCode] = groupKey.split(':')
+        unfilled.push({ day: Number(dayNum), shift_code: shiftCode, work_item: String(w.id) })
       }
     }
   }
@@ -229,12 +331,14 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
   for (const [key, shiftCode] of assigned) {
     const [empId, date] = key.split(':')
     const [, m, d] = date.split('-').map(Number)
+    const workItemIds = workItemByKey.get(key) || []
     assignments.push({
       year,
       month: m,
       day: d,
       shift_code: shiftCode,
       employee_id: empId,
+      work_item: workItemIds.join(','),
     })
   }
   assignments.sort((a, b) => a.day - b.day)
@@ -259,4 +363,67 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
       perEmployee,
     },
   }
+}
+
+/**
+ * 把工作項目分配給一個班別內的人員（尊重員工技能）。
+ *
+ * 規則：
+ * - 只有一人 → 該人負責「所有」工作項目（一人要同時勝任吧台與內場）
+ * - 多人 → 依序為每個工作項目找一位「具備該技能」的人負責（優先挑還沒分配到的人）
+ * - 若某工作項目無人具備技能 → 不指派（該項目即「未被滿足」）
+ * - 其餘沒分配到的人 → 顯示他的第一個技能（有技能者）
+ *
+ * @param {Array<string>} people 該班的人員 id 列表
+ * @param {Array} workItems 工作項目 [{id, name, icon}]
+ * @param {Map<string, Set<string>>} skillsByEmp 員工技能表
+ * @returns {Object<string, string[]>} empId → work_item_id[]
+ */
+export function distributeWorkItems(people, workItems, skillsByEmp) {
+  const byEmp = {}
+  if (!workItems.length) return byEmp
+  if (people.length === 1) {
+    // 只有一人 → 只分配「該人具備技能」的工作項目，避免把沒技能的工作（例：內場員工被排吧台）
+    // 勾到該人身上；缺少技能而無法覆蓋的項目會由呼叫端視為「未被滿足」
+    const pid = String(people[0])
+    const sks = skillsByEmp.get(pid)
+    const owned = sks && sks.size ? workItems.filter((w) => sks.has(String(w.id))).map((w) => String(w.id)) : []
+    if (owned.length) byEmp[pid] = owned
+    return byEmp
+  }
+  const covered = new Set()
+  for (const w of workItems) {
+    const wid = String(w.id)
+    let pick = null
+    for (const id of people) {
+      const sks = skillsByEmp.get(String(id))
+      if (sks && sks.has(wid) && !covered.has(id)) {
+        pick = id
+        break
+      }
+    }
+    if (!pick) {
+      for (const id of people) {
+        const sks = skillsByEmp.get(String(id))
+        if (sks && sks.has(wid)) {
+          pick = id
+          break
+        }
+      }
+    }
+    if (!pick) continue
+    const pid = String(pick)
+    byEmp[pid] = byEmp[pid] || []
+    if (!byEmp[pid].includes(wid)) byEmp[pid].push(wid)
+    covered.add(pid)
+  }
+  for (const id of people) {
+    const pid = String(id)
+    if (!byEmp[pid]) {
+      const sks = skillsByEmp.get(pid)
+      const w = sks ? workItems.find((x) => sks.has(String(x.id))) : undefined
+      if (w) byEmp[pid] = [String(w.id)]
+    }
+  }
+  return byEmp
 }

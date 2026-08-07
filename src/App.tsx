@@ -9,6 +9,7 @@ import Availability from './views/Availability'
 import Generate from './views/Generate'
 import Employees from './views/Employees'
 import ShiftTypes from './views/ShiftTypes'
+import WorkItems from './views/WorkItems'
 import Users from './views/Users'
 import Settings from './views/Settings'
 
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/generate" element={<Protected><AdminOnly><Generate /></AdminOnly></Protected>} />
         <Route path="/employees" element={<Protected><AdminOnly><Employees /></AdminOnly></Protected>} />
         <Route path="/shifts" element={<Protected><AdminOnly><ShiftTypes /></AdminOnly></Protected>} />
+        <Route path="/work-items" element={<Protected><AdminOnly><WorkItems /></AdminOnly></Protected>} />
         <Route path="/users" element={<Protected><AdminOnly><Users /></AdminOnly></Protected>} />
         <Route path="/settings" element={<Protected><AdminOnly><Settings /></AdminOnly></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />

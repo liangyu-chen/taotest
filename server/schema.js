@@ -1,0 +1,54 @@
+// =============================================================
+// schema.js —— 資料表定義與共用常數
+// 資料層（pg.js / storage.js）從這裡取表格結構與常數，
+// 確保欄位定義只有一份來源。
+// =============================================================
+
+export const TABLES = {
+  users: ['id', 'username', 'password_hash', 'display_name', 'role', 'employee_id', 'created_at'],
+  employees: ['id', 'name', 'employee_no', 'employee_type', 'shift_hours', 'weekly_hours', 'color', 'active', 'created_at'],
+  employee_skills: ['employee_id', 'work_item_id'],
+  shift_types: ['id', 'name', 'code', 'start_time', 'end_time', 'color', 'sort', 'created_at'],
+  headcounts: ['shift_code', 'day_type', 'count'],
+  availability: ['employee_id', 'date', 'status', 'note', 'start_time', 'end_time'],
+  schedule: ['year', 'month', 'day', 'shift_code', 'employee_id', 'note', 'work_item'],
+  schedule_locks: ['year', 'month', 'day'],
+  settings: ['key', 'value', 'desc'],
+  work_items: ['id', 'name', 'icon', 'sort', 'created_at'],
+}
+
+export const DAY_TYPES = ['weekday', 'weekend', 'holiday']
+
+export const EMPLOYEE_COLORS = [
+  '#f59e0b',
+  '#22d3ee',
+  '#a78bfa',
+  '#34d399',
+  '#fb923c',
+  '#60a5fa',
+  '#f472b6',
+  '#a3e635',
+  '#e879f9',
+  '#2dd4bf',
+  '#f87171',
+  '#facc15',
+]
+
+export const DEFAULT_SETTINGS = [
+  ['work_start', '12:00', '每日開始營業時間'],
+  ['work_end', '24:00', '每日結束營業時間'],
+  ['fulltime_shift_hours', '8', '正職每班固定時數'],
+  ['parttime_shift_hours', '6', '工讀每班預設時數（可依員工個別覆寫）'],
+  ['max_consecutive_work_days', '6', '每人每週最多連續工作天數（0 = 不限制）'],
+  ['holidays', '', '例假日日期，一行一天（格式 2026-01-01）'],
+]
+
+// 產生下一個 id（傳入某張表的資料列，回傳目前最大 id + 1）
+export function nextId(rows, field = 'id') {
+  let max = 0
+  for (const row of rows) {
+    const n = Number.parseInt(String(row[field]), 10)
+    if (!Number.isNaN(n) && n > max) max = n
+  }
+  return max + 1
+}
