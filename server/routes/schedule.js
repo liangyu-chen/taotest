@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { readTable, replaceRows, appendRows, deleteWhere, upsertRow, TABLES } from '../storage.js'
+import { readTable, selectWhere, replaceRows, appendRows, deleteWhere, upsertRow, TABLES } from '../storage.js'
 import { requireAuth, requireAdmin } from '../auth.js'
 import { generateSchedule } from '../scheduler.js'
 
@@ -89,18 +89,17 @@ router.delete('/availability', requireAuth, async (req, res, next) => {
 router.get('/schedule', requireAuth, async (req, res, next) => {
   try {
     const { y, m } = monthBounds(req.query.year, req.query.month)
-    const all = await readTable('schedule')
-    const assignments = all
-      .filter((a) => Number(a.year) === y && Number(a.month) === m)
-      .map((a) => ({
-        year: Number(a.year),
-        month: Number(a.month),
-        day: Number(a.day),
-        shift_code: a.shift_code,
-        employee_id: String(a.employee_id),
-        note: a.note || '',
-        work_item: a.work_item || '',
-      }))
+    // 直接在 SQL 過濾月份，配合 ux_schedule_key 前綴索引，不再整表撈回 JS 端
+    const all = await selectWhere('schedule', { year: String(y), month: String(m) })
+    const assignments = all.map((a) => ({
+      year: Number(a.year),
+      month: Number(a.month),
+      day: Number(a.day),
+      shift_code: a.shift_code,
+      employee_id: String(a.employee_id),
+      note: a.note || '',
+      work_item: a.work_item || '',
+    }))
     res.json({ assignments })
   } catch (e) {
     next(e)
@@ -110,11 +109,8 @@ router.get('/schedule', requireAuth, async (req, res, next) => {
 router.get('/schedule/locks', requireAuth, async (req, res, next) => {
   try {
     const { y, m } = monthBounds(req.query.year, req.query.month)
-    const rows = await readTable('schedule_locks')
-    const lockedDays = rows
-      .filter((r) => Number(r.year) === y && Number(r.month) === m)
-      .map((r) => Number(r.day))
-      .sort((a, b) => a - b)
+    const rows = await selectWhere('schedule_locks', { year: String(y), month: String(m) })
+    const lockedDays = rows.map((r) => Number(r.day)).sort((a, b) => a - b)
     res.json({ lockedDays })
   } catch (e) {
     next(e)

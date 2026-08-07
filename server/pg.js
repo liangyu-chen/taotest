@@ -63,6 +63,13 @@ export async function ensureTabs(names) {
     stmts.push(
       `CREATE UNIQUE INDEX IF NOT EXISTS ux_schedule_key ON "schedule" (year, month, day, shift_code, employee_id)`,
     )
+    // 移除舊的兩條索引：
+    // - constraint_1 唯一(year,month,day,employee_id)：少了 shift_code，會擋掉「同一人同一天排兩班」
+    // - index_1 (year,employee_id,month,day)：已被 ux_schedule_key 涵蓋，冗餘
+    stmts.push(`ALTER TABLE "schedule" DROP CONSTRAINT IF EXISTS "constraint_1"`)
+    stmts.push(`DROP INDEX IF EXISTS "index_1"`)
+    // 班表總覽依月份查詢（ux_schedule_key 的前綴 (year,month) 已涵蓋 schedule；lock 表另建）
+    stmts.push(`CREATE INDEX IF NOT EXISTS idx_schedule_locks_ym ON "schedule_locks" (year, month)`)
     await client.query(stmts.join(';\n'))
   } finally {
     client.release()
