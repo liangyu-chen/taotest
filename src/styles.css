@@ -38,8 +38,14 @@ body {
   font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
   font-size: calc(15px * var(--font-scale));
   color: var(--ink);
-  background: var(--bg);
+  background:
+    radial-gradient(rgba(120, 100, 60, 0.06) 1px, transparent 1px),
+    radial-gradient(1000px 600px at 15% 10%, rgba(31, 110, 94, 0.10), transparent 60%),
+    radial-gradient(800px 500px at 90% 85%, rgba(180, 83, 9, 0.12), transparent 55%),
+    var(--bg);
+  background-size: 22px 22px, 100% 100%, 100% 100%, 100% 100%;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 button,
@@ -2455,9 +2461,14 @@ button.shift-chip:not(.shift-chip--add):hover {
 /* ---------- Login ---------- */
 
 .login-page {
-  height: 100vh;
-  display: grid;
-  place-items: center;
+  height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   background:
     radial-gradient(rgba(120, 100, 60, 0.06) 1px, transparent 1px),
     radial-gradient(1000px 600px at 15% 10%, rgba(31, 110, 94, 0.10), transparent 60%),
@@ -2602,7 +2613,6 @@ button.shift-chip:not(.shift-chip--add):hover {
     min-height: 100dvh;
   }
   html:not([data-view="desktop"]) .login-page {
-    height: 100dvh;
     padding: 14px;
   }
   html:not([data-view="desktop"]) .sidebar {
@@ -3032,7 +3042,6 @@ button.shift-chip:not(.shift-chip--add):hover {
     min-height: 100dvh;
   }
   html[data-view="mobile"] .login-page {
-    height: 100dvh;
     padding: 14px;
   }
   html[data-view="mobile"] .sidebar {
