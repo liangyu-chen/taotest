@@ -61,6 +61,8 @@ function useMonthData() {
   const [settings, setSettings] = useState<Setting[]>([])       // 含例假日清單（判斷某天是平日/週末/例假日用）
   const [workItems, setWorkItems] = useState<WorkItem[]>([])    // 工作項目（吧台/內場…，判斷工作項目是否滿足用）
   const [lockedDays, setLockedDays] = useState<number[]>([])    // 已鎖定的日期（自動排班會保留原狀）
+  const [closedDays, setClosedDays] = useState<number[]>([])    // 公休日（當天不營業，自動排班跳過）
+  const [prevAssignments, setPrevAssignments] = useState<Assignment[]>([]) // 上個月的排班（算跨月連續上班天數用）
   const [loading, setLoading] = useState(true)
   const assignmentsRef = useRef<Assignment[]>([])
 
@@ -70,7 +72,10 @@ function useMonthData() {
       const silent = !!opts?.silent
       if (!silent) setLoading(true)
       try {
-        const [a, e, s, av, hc, st, wi, lk] = await Promise.all([
+        // 上個月（或跨年）的排班：供「跨月連續上班天數」往前回溯用
+        const prevYear = month === 1 ? year - 1 : year
+        const prevMonth = month === 1 ? 12 : month - 1
+        const [a, e, s, av, hc, st, wi, lk, cd, prev] = await Promise.all([
           api<{ assignments: Assignment[] }>(`/schedule?year=${year}&month=${month}`),
           api<{ employees: Employee[] }>('/employees'),
           api<{ shiftTypes: ShiftType[] }>('/shift-types'),
@@ -79,11 +84,14 @@ function useMonthData() {
           api<{ settings: Setting[] }>('/settings'),
           api<{ workItems: WorkItem[] }>('/work-items'),
           api<{ lockedDays: number[] }>(`/schedule/locks?year=${year}&month=${month}`),
+          api<{ closedDays: number[] }>(`/schedule/closed?year=${year}&month=${month}`),
+          api<{ assignments: Assignment[] }>(`/schedule?year=${prevYear}&month=${prevMonth}`),
         ])
         // 靜默重整時，避免後端一時回空班表把剛排好的資料洗掉
         if (!(silent && a.assignments.length === 0 && assignmentsRef.current.length > 0)) {
           setAssignments(a.assignments)
         }
+        setPrevAssignments(prev.assignments)
         setEmployees(e.employees)
         setShiftTypes(s.shiftTypes)
         setAvailability(av.availability)
@@ -91,6 +99,7 @@ function useMonthData() {
         setSettings(st.settings)
         setWorkItems(wi.workItems)
         setLockedDays(lk.lockedDays)
+        setClosedDays(cd.closedDays)
       } catch (err) {
         toast((err as Error).message, 'error')
       } finally {
@@ -110,14 +119,14 @@ function useMonthData() {
     void load()
   }, [load])
 
-  return { year, month, setYear, setMonth, assignments, setAssignments, employees, shiftTypes, availability, headcounts, settings, workItems, lockedDays, setLockedDays, loading, reload: load }
+  return { year, month, setYear, setMonth, assignments, setAssignments, prevAssignments, employees, shiftTypes, availability, headcounts, settings, workItems, lockedDays, setLockedDays, closedDays, setClosedDays, loading, reload: load }
 }
 
 export default function Schedule() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
   const data = useMonthData()
-  const { year, month, assignments, employees, shiftTypes, availability, headcounts, settings, workItems } = data
+  const { year, month, assignments, prevAssignments, employees, shiftTypes, availability, headcounts, settings, workItems } = data
   const [editing, setEditing] = useState<{ day: number; shiftCode: string | null; employeeId?: string } | null>(null) // 正在編輯哪一天的指派（null = 沒開彈窗）
   const [dropTarget, setDropTarget] = useState<string | null>(null)            // 拖曳中目前停在哪個格子（用來加亮「＋」或班別）
   const [removeDrag, setRemoveDrag] = useState<{ day: number; shift_code: string; employee_id: string } | null>(null) // 拖曳移除中的人員
@@ -125,8 +134,10 @@ export default function Schedule() {
   const [isDragging, setIsDragging] = useState(false)                          // 是否正在拖曳（用來停用其他班別的 hover 效果，只突顯被拖曳者）
   const [generating, setGenerating] = useState(false)                          // 是否正在自動排班
   const [confirmGenerate, setConfirmGenerate] = useState(false)                // 是否顯示「自動排班」確認彈窗
+  const [confirmClosed, setConfirmClosed] = useState<number[] | null>(null)     // 準備設為公休日的日期（需二次確認）
   const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set())     // 被選取的日期（點格子選取，可多選）
   const { lockedDays, setLockedDays } = data
+  const { closedDays, setClosedDays } = data
 
   // 切換月份時清掉目前的選取，避免選到舊月份的天數
   useEffect(() => {
@@ -161,6 +172,34 @@ export default function Schedule() {
         return [...set].sort((a, b) => a - b)
       })
       toast(locked ? `已鎖定 ${days.length} 天（自動排班不會更動）` : `已解除 ${days.length} 天的鎖定`)
+    } catch (err) {
+      toast((err as Error).message, 'error')
+    }
+  }
+
+  // 設定或解除公休日。設為公休日時，後端會一併清空該天的排班人員，
+  // 前端也在本地同步移除對應排班，避免畫面殘留。
+  const applyClosed = async (days: number[], closed: boolean) => {
+    if (days.length === 0 || !isAdmin) return
+    try {
+      await api('/schedule/closed', {
+        method: 'PUT',
+        body: { year, month, days, closed },
+      })
+      setClosedDays((prev) => {
+        const set = new Set(prev)
+        for (const d of days) {
+          if (closed) set.add(d)
+          else set.delete(d)
+        }
+        return [...set].sort((a, b) => a - b)
+      })
+      if (closed) {
+        // 公休日當天不營業：移除該日所有已排人員
+        data.setAssignments((prev) => prev.filter((a) => !days.includes(a.day)))
+      }
+      toast(closed ? `已將 ${days.length} 天設為公休日（自動排班會跳過）` : `已解除 ${days.length} 天的公休日`)
+      await data.reload({ silent: true })
     } catch (err) {
       toast((err as Error).message, 'error')
     }
@@ -208,6 +247,7 @@ export default function Schedule() {
     return m
   }, [shiftTypes])
 
+  // 上午/下午區域拖曳時的預設班別：
   // 把「1,2」這種逗號分隔的工作項目 id 字串轉成 WorkItem 列表（供姓名後方顯示）。
   // 一律依 workItems 的排序（工作項目管理頁的 sort）顯示，避免存檔順序不同導致圖示亂跳
   const workItemsOf = (raw?: string): WorkItem[] => {
@@ -225,6 +265,67 @@ export default function Schedule() {
     const holidays = settingsToMap(settings).holidays || ''
     return new Set(holidays.split(/[\n,;\s]+/).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)))
   }, [settings])
+
+  // 每人每週最多連續工作天數（0 = 不限制）；手動加人時若會超過，彈窗顯示警告
+  const maxConsecutiveWorkDays = useMemo(() => {
+    const n = Number(settingsToMap(settings).max_consecutive_work_days) || 0
+    return n > 0 ? n : 0
+  }, [settings])
+
+  // 「員工 → 有排班的日期集合」：含本月與上個月的排班，讓跨月連續上班天數數得準
+  const dutyByEmp = useMemo(() => {
+    const m = new Map<string, Set<string>>()
+    const add = (empId: string, dkey: string) => {
+      let set = m.get(empId)
+      if (!set) {
+        set = new Set()
+        m.set(empId, set)
+      }
+      set.add(dkey)
+    }
+    for (const a of assignments) add(a.employee_id, dateKey(a.year, a.month, a.day))
+    for (const a of prevAssignments) add(a.employee_id, dateKey(a.year, a.month, a.day))
+    return m
+  }, [assignments, prevAssignments])
+
+  // 計算某員工「以某天為中心」的連續上班天數（含該天）。
+  // 該天本身一定算 1 天（即使還沒排班——人力指派彈窗在「新增」人員時那天尚未排，
+  // 也要把這天算進去才知道排下去會連續幾天）。
+  // 往前數時若一路數到當月 1 號仍連續，會繼續回溯到上個月（含跨年），
+  // 讓「上個月連到本月初」的連續天數也能被偵測到。
+  // 行事曆上用來在已排班方塊標示「連續工作天數超限」。
+  const consecutiveDaysOf = useCallback(
+    (empId: string, targetDay: number): number => {
+      if (maxConsecutiveWorkDays <= 0) return 0
+      const set = dutyByEmp.get(empId)
+      const has = (y: number, m: number, d: number) => !!set?.has(dateKey(y, m, d))
+      let count = 1
+      // 往前數（跨月時切到上個月，資料只回溯一個月，再往前沒有資料自然停止）
+      let y = year
+      let m = month
+      let d = targetDay - 1
+      while (has(y, m, d)) {
+        count++
+        d--
+        if (d < 1) {
+          if (m === 1) {
+            y--
+            m = 12
+          } else {
+            m--
+          }
+          d = daysInMonth(y, m)
+        }
+      }
+      // 往後數（只數到當月底；未來月份尚未排班）
+      for (let d = targetDay + 1; d <= daysInMonth(year, month); d++) {
+        if (!has(year, month, d)) break
+        count++
+      }
+      return count
+    },
+    [year, month, dutyByEmp, maxConsecutiveWorkDays],
+  )
 
   // 「班別代碼:日型」→ 需求人數 查詢表（判斷每個班別這天需要幾人）
   const headcountMap = useMemo(() => {
@@ -419,6 +520,7 @@ export default function Schedule() {
     const key = dateKey(year, month, day)
     const isToday = key === todayKey
     const isLocked = lockedDays.includes(day)
+    const isClosed = closedDays.includes(day)
     const isSelected = selectedDays.has(day)
     const weekday = WEEKDAYS[(offset + day - 1) % 7]
     const scheduledEmpIds = new Set(slots.map((s) => s.assignment!.employee_id))
@@ -429,6 +531,33 @@ export default function Schedule() {
     }
     const amSlots = slots.filter((s) => isAm(shiftById.get(s.assignment!.shift_code)))
     const pmSlots = slots.filter((s) => !isAm(shiftById.get(s.assignment!.shift_code)))
+
+    // 公休日：當天不營業，直接顯示公休標記，不檢查人力/工作項目
+    if (isClosed) {
+      return (
+        <div
+          key={day}
+          className={`cal-cell cal-cell--closed${isToday ? ' cal-cell--today' : ''}${isSelected ? ' cal-cell--selected' : ''}`}
+          onClick={() => toggleSelectDay(day)}
+          title={
+            isAdmin
+              ? '公休日：當天不營業，自動排班會跳過。點格子可選取後解除公休日。'
+              : undefined
+          }
+        >
+          <div className="cal-cell__head">
+            <span className="cal-cell__day">{month}/{day}</span>
+            <span className="cal-cell__week">{weekday}</span>
+            <span className="cal-cell__flags">
+              {isToday && <span className="cal-cell__today">今天</span>}
+            </span>
+          </div>
+          <div className="cal-cell__closed">
+            <span className="cal-cell__closed-badge">公休</span>
+          </div>
+        </div>
+      )
+    }
 
     // 判斷這天「人力/工作未滿足」：
     // 1) 人力不足：逐班別比對 需求人數 > 實際排班人數（需求 0 = 該班當日不開，不算）
@@ -476,6 +605,8 @@ export default function Schedule() {
       const name = slot.employee?.name || '?'
       const rec = availByKey.get(`${slot.assignment!.employee_id}:${key}`)
       const conflict = rec?.status === 'off' || rec?.status === 'unavailable'
+      const overConsecutive =
+        maxConsecutiveWorkDays > 0 && consecutiveDaysOf(slot.assignment!.employee_id, day) > maxConsecutiveWorkDays
       const code = slot.assignment!.shift_code
       return (
         <button
@@ -553,10 +684,15 @@ export default function Schedule() {
             }
             dropToAssign(day, slot.assignment!.shift_code, ev)
           }}
-          title={`${isAdmin && !isLocked ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : isLocked ? '此日已鎖定，無法更動排班。' : ''}${shift?.name || ''}・${name}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}`}
+          title={`${isAdmin && !isLocked ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : isLocked ? '此日已鎖定，無法更動排班。' : ''}${shift?.name || ''}・${name}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}${overConsecutive ? `（連續工作已 ${consecutiveDaysOf(slot.assignment!.employee_id, day)} 天，超過上限 ${maxConsecutiveWorkDays} 天）` : ''}`}
         >
           {conflict && (
             <span className="shift-chip__warn" title={`${name} 當日標記「${statusLabel(rec)}」`}>
+              ⚠
+            </span>
+          )}
+          {overConsecutive && (
+            <span className="shift-chip__warn shift-chip__warn--consec" title={`${name} 連續工作已 ${consecutiveDaysOf(slot.assignment!.employee_id, day)} 天，超過上限 ${maxConsecutiveWorkDays} 天`}>
               ⚠
             </span>
           )}
@@ -728,18 +864,35 @@ export default function Schedule() {
         </div>
       )}
 
-      {/* 鎖定工具列：選取格子後出現，可一次鎖定/解除多天 */}
+      {/* 鎖定工具列：選取格子後出現，可一次鎖定/解除/設公休多天 */}
       {isAdmin && selectedDays.size > 0 && (
         <div className="lock-toolbar">
           <span className="lock-toolbar__info">
             已選取 <b>{selectedDays.size}</b> 天
             {[...selectedDays].some((d) => lockedDays.includes(d)) && '（含已鎖定天）'}
+            {[...selectedDays].some((d) => closedDays.includes(d)) && '（含公休日）'}
           </span>
           <button type="button" className="btn btn--small btn--primary" onClick={() => void applyLock([...selectedDays], true)}>
             🔒 鎖定所選
           </button>
           <button type="button" className="btn btn--small" onClick={() => void applyLock([...selectedDays], false)}>
             🔓 解除鎖定
+          </button>
+          <button
+            type="button"
+            className="btn btn--small btn--danger"
+            onClick={() => setConfirmClosed([...selectedDays])}
+            title="設為公休日：當天不營業，自動排班會跳過；既有排班人員會被清空"
+          >
+            🏖 設為公休日
+          </button>
+          <button
+            type="button"
+            className="btn btn--small"
+            onClick={() => void applyClosed([...selectedDays], false)}
+            title="解除公休日：恢復當天營業，自動排班會重新安排"
+          >
+            🏝 解除公休日
           </button>
           <button type="button" className="btn btn--small" onClick={() => setSelectedDays(new Set())}>
             取消選取
@@ -775,12 +928,20 @@ export default function Schedule() {
                 衝突
               </span>
               <span className="legend__item">
+                <i className="legend-warn legend-warn--consec">⚠</i>
+                連續上班超限
+              </span>
+              <span className="legend__item">
                 <i className="legend-short" />
                 人力/工作未滿足
               </span>
               <span className="legend__item">
                 <i className="legend-lock">🔒</i>
                 已鎖定（自動排班不更動）
+              </span>
+              <span className="legend__item">
+                <i className="legend-closed">🏖</i>
+                公休日（不營業，自動排班跳過）
               </span>
               <span className="legend__item">
                 <i className="legend-selected" />
@@ -867,6 +1028,8 @@ export default function Schedule() {
           employees={employees}
           workItems={workItems}
           assignedDay={assignments.filter((a) => a.day === editing.day)}
+          maxConsecutiveWorkDays={maxConsecutiveWorkDays}
+          consecutiveDaysOf={consecutiveDaysOf}
           onClose={(finalLocal) => {
             setEditing(null)
             data.setAssignments((prev) => [...prev.filter((a) => a.day !== editing.day), ...finalLocal])
@@ -877,7 +1040,7 @@ export default function Schedule() {
 
       {isAdmin && (
         <p className="hint">
-          提示：班別可直接點擊修改人力；格子下方圓點為各員工當日狀態，<b>拖曳圓點到「＋」或任一班別會跳出視窗選擇要加入的班別</b>。<b>拖曳已排班的姓名方塊到其他班別可直接「置換」班別</b>，<b>拖到下方「移除此人員」區塊則直接移除</b>。有「⚠」代表該員工已排班但當日標記排休或沒空，請檢查。姓名後方的 {workItems.filter((w) => w.icon).map((w) => `${w.icon}${w.name}`).join('／')} 是該員工當日負責的工作項目。<b>日期格子有紅色虛線外框＋「⚠人力/工作未滿足」標籤</b>代表當日尚有班別未達需求人數，或該班的{workItems.map((w) => w.name).join('／')}工作項目還沒有人負責。
+          提示：班別可直接點擊修改人力；格子下方圓點為各員工當日狀態，<b>拖曳圓點到「＋」或任一班別會跳出視窗選擇要加入的班別</b>。<b>拖曳已排班的姓名方塊到其他班別可直接「置換」班別</b>，<b>拖到下方「移除此人員」區塊則直接移除</b>。有「⚠」代表該員工已排班但當日標記排休或沒空，請檢查；琥珀色「⚠」代表該員工連續上班天數已超過上限。姓名後方的 {workItems.filter((w) => w.icon).map((w) => `${w.icon}${w.name}`).join('／')} 是該員工當日負責的工作項目。<b>日期格子有紅色虛線外框＋「⚠人力/工作未滿足」標籤</b>代表當日尚有班別未達需求人數，或該班的{workItems.map((w) => w.name).join('／')}工作項目還沒有人負責。<b>標示「🏖 公休」的日子當天不營業</b>，自動排班會跳過，設為公休日時既有排班會被清空。
           {(() => {
             const offCount = availability.filter((a) => a.status === 'off').length
             return offCount > 0 ? ` 本月共有 ${offCount} 個排休記錄。` : ''
@@ -917,7 +1080,7 @@ export default function Schedule() {
               確定要執行自動排班？將重新產生 <b>{year}</b> 年 <b>{month}</b> 月的班表，並覆蓋既有排班。
             </p>
             <p className="hint">
-              提示：可先用〈批次鎖定〉鎖定不想被更動的日期；已鎖定的天數不會被自動排班變更。
+              提示：可先用〈批次鎖定〉鎖定不想被更動的日期；已鎖定的天數不會被自動排班變更。公休日（🏖）當天不營業，自動排班會直接跳過。
             </p>
             <div className="modal__actions">
               <button type="button" className="btn" onClick={() => setConfirmGenerate(false)}>
@@ -932,6 +1095,36 @@ export default function Schedule() {
                 }}
               >
                 ⟳ 開始排班
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 公休日確認彈窗：設為公休日會清空當天已排班人員，需先警告 */}
+      {confirmClosed && (
+        <Modal title="設為公休日確認" onClose={() => setConfirmClosed(null)}>
+          <div className="stack">
+            <p className="modal-lead">
+              確定要將 <b>{confirmClosed.length}</b> 天設為公休日？
+            </p>
+            <p className="hint">
+              ⚠ 設為公休日後，當天<b>不營業</b>：既有已排班的人員<b>會被清空</b>，且自動排班會<b>跳過</b>這些日子。若要讓這些天恢復營業，可再使用〈解除公休日〉。
+            </p>
+            <div className="modal__actions">
+              <button type="button" className="btn" onClick={() => setConfirmClosed(null)}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                onClick={() => {
+                  const days = confirmClosed
+                  setConfirmClosed(null)
+                  void applyClosed(days, true)
+                }}
+              >
+                🏖 設為公休日
               </button>
             </div>
           </div>
@@ -956,6 +1149,8 @@ function AssignModal({
   employees,
   workItems,
   assignedDay,
+  maxConsecutiveWorkDays,
+  consecutiveDaysOf,
   onClose,
 }: {
   year: number
@@ -967,6 +1162,8 @@ function AssignModal({
   employees: Employee[]
   workItems: WorkItem[]
   assignedDay: Assignment[]
+  maxConsecutiveWorkDays: number
+  consecutiveDaysOf: (empId: string, targetDay: number) => number
   onClose: (finalLocal: Assignment[]) => void
 }) {
   const workTypes = shiftTypes.filter((s) => s.code !== 'OFF')
@@ -994,6 +1191,14 @@ function AssignModal({
     (e) => e.active !== '0' && !usedToday.has(e.id) && !people.some((p) => p.employee_id === e.id),
   )
   const draggedEmp = initialEmployeeId ? empById.get(initialEmployeeId) : undefined
+
+  // 計算某員工「若在某天排班，會連續工作幾天上限」：以該天為中心往前往後數，
+  // 會跨月回溯上個月的排班（由父層傳入的 consecutiveDaysOf 處理）。
+  // 若超過 max_consecutive_work_days 設定，就在新增人員處顯示警告。
+  const addTargetId = newEmployeeId || (draggedEmp ? draggedEmp.id : '')
+  const addTargetEmp = addTargetId ? empById.get(addTargetId) : undefined
+  const addConsecutive = addTargetId ? consecutiveDaysOf(addTargetId, day) : 0
+  const addOverConsecutive = maxConsecutiveWorkDays > 0 && addConsecutive > maxConsecutiveWorkDays
 
   // 把「1,2」逗號分隔的工作項目 id 字串轉成陣列（供勾選框比對）
   const workItemIdsOf = (raw?: string): string[] =>
@@ -1116,9 +1321,16 @@ function AssignModal({
           {people.map((p) => {
             const emp = empById.get(p.employee_id)
             const empSkills = new Set((emp?.skills || []).map((s) => String(s.id)))
+            const pConsecutive = consecutiveDaysOf(p.employee_id, day)
+            const pOver = maxConsecutiveWorkDays > 0 && pConsecutive > maxConsecutiveWorkDays
             return (
               <div key={p.employee_id} className="assign-person">
                 <span className="assign-person__name">{emp?.name || '未知員工'}</span>
+                {pOver && (
+                  <span className="assign-warn assign-warn--badge" title={`此員工連續工作 ${pConsecutive} 天，超過上限 ${maxConsecutiveWorkDays} 天`}>
+                    ⚠ 已連續 {pConsecutive} 天
+                  </span>
+                )}
                 <div className="assign-person__wis">
                   {workItems.map((w) => {
                     const on = workItemIdsOf(p.work_item).includes(String(w.id))
@@ -1169,6 +1381,12 @@ function AssignModal({
             新增人員
           </button>
         </div>
+        {addTargetEmp && addOverConsecutive && (
+          <p className="assign-warn">
+            ⚠ <b>{addTargetEmp.name}</b> 排入 {day} 日後將<b>連續上班 {addConsecutive} 天</b>，已超過上限
+            {maxConsecutiveWorkDays} 天。請確認是否要繼續，或另選他人。
+          </p>
+        )}
         <p className="hint">
           勾選工作項目、填寫備註後按「儲存」一次寫入；按「關閉」放棄編輯、回復原狀。每人每天只排一個班別。
         </p>

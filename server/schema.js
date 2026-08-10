@@ -13,6 +13,7 @@ export const TABLES = {
   availability: ['employee_id', 'date', 'status', 'note', 'start_time', 'end_time'],
   schedule: ['year', 'month', 'day', 'shift_code', 'employee_id', 'note', 'work_item'],
   schedule_locks: ['year', 'month', 'day'],
+  closed_days: ['year', 'month', 'day'],
   settings: ['key', 'value', 'desc'],
   work_items: ['id', 'name', 'icon', 'sort', 'created_at'],
 }

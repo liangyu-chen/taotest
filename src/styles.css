@@ -993,6 +993,53 @@ html.modal-open .content {
     var(--panel-2);
 }
 
+/* 公休日：當天不營業。以斜紋底色＋「公休」徽章呈現，與「鎖定」的紫色斜紋做區別 */
+.cal-cell--closed {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 8px,
+      rgba(120, 130, 140, 0.12) 8px,
+      rgba(120, 130, 140, 0.12) 16px
+    ),
+    var(--panel-2);
+  cursor: pointer;
+}
+
+.cal-cell--closed .cal-cell__day,
+.cal-cell--closed .cal-cell__week,
+.cal-cell--closed .cal-cell__flags {
+  opacity: 0.55;
+}
+
+.cal-cell__closed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 44px;
+}
+
+.cal-cell__closed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: calc(12.5px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #52525b;
+  background: rgba(120, 130, 140, 0.16);
+  border: 1px solid rgba(120, 130, 140, 0.4);
+}
+
+html[data-view="desktop"] .cal-cell--closed .cal-cell__day,
+html[data-view="desktop"] .cal-cell--closed .cal-cell__week {
+  cursor: pointer;
+}
+
 html[data-view="desktop"] .cal-cell--locked .shift-chip,
 html[data-view="desktop"] .cal-cell--locked .shift-chip--add,
 html[data-view="desktop"] .cal-cell--locked .cal-emp {
@@ -1378,6 +1425,32 @@ button.shift-chip:not(.shift-chip--add):hover {
   flex: none;
 }
 
+/* 手動加人時若連續工作天數超過上限的警告訊息 */
+.assign-warn {
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.45;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #7f1d1d;
+  background: #fdeceb;
+  border: 1px solid #f3c6c3;
+}
+
+.assign-warn--badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 8px;
+  font-size: calc(10.5px * var(--font-scale));
+  border-radius: 999px;
+  color: #7f1d1d;
+  background: #fdeceb;
+  border: 1px solid #f3c6c3;
+  flex: none;
+}
+
 .assign-add {
   display: flex;
   gap: 8px;
@@ -1400,6 +1473,13 @@ button.shift-chip:not(.shift-chip--add):hover {
   background: #fff;
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+/* 連續工作天數超過上限的警告：與「排休/沒空衝突」用不同底色區分 */
+.shift-chip__warn--consec {
+  color: #b45309;
+  background: #fffbeb;
+  box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.35);
 }
 
 .cal-cell__avail {
@@ -1504,6 +1584,14 @@ button.shift-chip:not(.shift-chip--add):hover {
   color: #f87171;
 }
 
+/* 連續上班超限的圖例：琥珀色圓點，與「衝突」的紅色區分 */
+.legend__item i.legend-warn--consec {
+  color: #b45309;
+  background: #fffbeb;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.35);
+}
+
 .legend-short {
   width: 14px;
   height: 14px;
@@ -1521,6 +1609,27 @@ button.shift-chip:not(.shift-chip--add):hover {
   font-size: calc(10px * var(--font-scale));
   line-height: 1;
   font-style: normal;
+}
+
+.legend__item i.legend-closed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  font-size: calc(9px * var(--font-scale));
+  line-height: 1;
+  font-style: normal;
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(120, 130, 140, 0.25),
+      rgba(120, 130, 140, 0.25) 3px,
+      transparent 3px,
+      transparent 6px
+    );
+  border: 1px solid rgba(120, 130, 140, 0.5);
 }
 
 .legend__item i.legend-selected {

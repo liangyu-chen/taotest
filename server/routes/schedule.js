@@ -117,6 +117,50 @@ router.get('/schedule/locks', requireAuth, async (req, res, next) => {
   }
 })
 
+// 公休日：查詢某月份哪些天是公休日（當天不營業，自動排班會跳過）
+router.get('/schedule/closed', requireAuth, async (req, res, next) => {
+  try {
+    const { y, m } = monthBounds(req.query.year, req.query.month)
+    const rows = await selectWhere('closed_days', { year: String(y), month: String(m) })
+    const closedDays = rows.map((r) => Number(r.day)).sort((a, b) => a - b)
+    res.json({ closedDays })
+  } catch (e) {
+    next(e)
+  }
+})
+
+// 批次設定/解除公休日；設定為公休日時會同時清空該天既有的排班人員
+router.put('/schedule/closed', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const { y, m } = monthBounds(req.body.year, req.body.month)
+    const days = Array.isArray(req.body.days)
+      ? [...new Set(req.body.days.map(Number).filter((d) => Number.isInteger(d) && d >= 1 && d <= 31))]
+      : []
+    const closed = req.body.closed !== false
+    const existing = await selectWhere('closed_days', { year: String(y), month: String(m) })
+    const currentDays = new Set(existing.map((r) => Number(r.day)))
+    if (closed) {
+      // 新增不在清單中的公休日
+      const missing = days.filter((d) => !currentDays.has(d))
+      if (missing.length) {
+        await appendRows('closed_days', missing.map((d) => [String(y), String(m), String(d)]))
+      }
+      // 清空這些天已排的人員
+      for (const d of days) {
+        await deleteWhere('schedule', { year: String(y), month: String(m), day: String(d) })
+      }
+    } else {
+      // 解除公休日：僅移除公休標記，不影響既有排班
+      for (const d of days) {
+        await deleteWhere('closed_days', { year: String(y), month: String(m), day: String(d) })
+      }
+    }
+    res.json({ ok: true })
+  } catch (e) {
+    next(e)
+  }
+})
+
 router.put('/schedule/locks', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { y, m } = monthBounds(req.body.year, req.body.month)
@@ -145,7 +189,7 @@ router.put('/schedule/locks', requireAuth, requireAdmin, async (req, res, next) 
 router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { y, m } = monthBounds(req.body.year, req.body.month)
-    const [employees, shiftTypes, headcounts, availability, settings, lockRows, wi, employeeSkills] =
+    const [employees, shiftTypes, headcounts, availability, settings, lockRows, wi, employeeSkills, closedRows] =
       await Promise.all([
         readTable('employees'),
         readTable('shift_types'),
@@ -155,12 +199,28 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
         readTable('schedule_locks'),
         readTable('work_items'),
         readTable('employee_skills'),
+        readTable('closed_days'),
       ])
+    // 上個月的排班：讓「本月初的連續上班天數」能回溯上個月（跨年時自動扣一年）
+    const prevY = m === 1 ? y - 1 : y
+    const prevM = m === 1 ? 12 : m - 1
+    const prevRows = await selectWhere('schedule', { year: String(prevY), month: String(prevM) })
+    const prevAssignments = prevRows.map((a) => ({
+      year: Number(a.year),
+      month: Number(a.month),
+      day: Number(a.day),
+      shift_code: a.shift_code,
+      employee_id: String(a.employee_id),
+    }))
     // 工作項目依 sort 排序，讓分配與存檔的圖示順序一致（吧台在前、內場在後）
     const workItems = wi.sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0))
     // 已鎖定的日期：自動排班完全保留原狀，不新增、不修改、不移除
     const lockedDays = new Set(
       lockRows.filter((r) => Number(r.year) === y && Number(r.month) === m).map((r) => Number(r.day)),
+    )
+    // 公休日：當天不營業，自動排班直接跳過（不排任何人）
+    const closedDays = new Set(
+      closedRows.filter((r) => Number(r.year) === y && Number(r.month) === m).map((r) => Number(r.day)),
     )
     const result = generateSchedule({
       year: y,
@@ -172,15 +232,19 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
       settings,
       workItems,
       employeeSkills,
+      closedDays,
+      prevAssignments,
     })
 
     const headers = TABLES.schedule
     const existing = await readTable('schedule')
-    // 保留「非本月」的舊資料 + 「本月但已鎖定」的既有排班
-    const keep = existing.filter((a) => !(Number(a.year) === y && Number(a.month) === m) || lockedDays.has(Number(a.day)))
-    // 自動排班的結果排除已鎖定日期（那些日期維持原狀）
+    // 保留「非本月」的舊資料 + 「本月但已鎖定」的既有排班；公休日一併清空
+    const keep = existing.filter(
+      (a) => !(Number(a.year) === y && Number(a.month) === m) || (lockedDays.has(Number(a.day)) && !closedDays.has(Number(a.day))),
+    )
+    // 自動排班的結果排除已鎖定與公休日期（那些日期維持原狀）
     const newRows = result.assignments
-      .filter((a) => !lockedDays.has(a.day))
+      .filter((a) => !lockedDays.has(a.day) && !closedDays.has(a.day))
       .map((a) => [
         String(a.year),
         String(a.month),
@@ -197,7 +261,7 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
     ]
     await replaceRows('schedule', rows)
 
-    result.unfilled = result.unfilled.filter((u) => !lockedDays.has(u.day))
+    result.unfilled = result.unfilled.filter((u) => !lockedDays.has(u.day) && !closedDays.has(u.day))
     res.json(result)
   } catch (e) {
     next(e)

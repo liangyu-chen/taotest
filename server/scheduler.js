@@ -52,12 +52,18 @@ function settingsMap(settings) {
  * @param {Array} options.settings    排班規則 [{key, value}]
  * @param {Array} options.workItems   工作項目 [{id, name, icon}]（每班需各至少一人負責）
  * @param {Array} options.employeeSkills 員工技能 [{employee_id, work_item_id}]
+ * @param {Array<number>|Set<number>} options.closedDays 公休日（當天不營業，直接跳過不排班）
+ * @param {Array} options.prevAssignments 上個月的排班 [{year, month, day, employee_id, ...}]（跨月連續上班天數用）
  */
-export function generateSchedule({ year, month, employees, shiftTypes, headcounts, availability, settings, workItems = [], employeeSkills = [] }) {
+export function generateSchedule({ year, month, employees, shiftTypes, headcounts, availability, settings, workItems = [], employeeSkills = [], closedDays = [], prevAssignments = [] }) {
+  const closedSet = closedDays instanceof Set ? closedDays : new Set((closedDays || []).map(Number))
   const cfg = settingsMap(settings)
   const fulltimeShiftHours = toNum(cfg.fulltime_shift_hours, 8)
   const parttimeShiftHours = toNum(cfg.parttime_shift_hours, 6)
   const maxConsecutive = toNum(cfg.max_consecutive_work_days, 0)
+  // 上個月的年月（跨年時自動扣一年）
+  const prevYear = month === 1 ? year - 1 : year
+  const prevMonth = month === 1 ? 12 : month - 1
   const holidays = new Set(
     String(cfg.holidays || '')
       .split(/[\n,;\s]+/)
@@ -149,6 +155,11 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     hoursDone[emp.id] = 0
     codeCount[emp.id] = {}
   }
+  // 先把「上個月的排班」也放進 assigned，這樣本月初的連續上班天數能回溯到上個月
+  for (const a of prevAssignments || []) {
+    if (!a.employee_id || !a.day) continue
+    assigned.set(`${a.employee_id}:${dateKey(prevYear, prevMonth, Number(a.day))}`, a.shift_code || '')
+  }
 
   // —— 工作項目（吧台/內場…）相關狀態 ——
   const skillsByEmp = new Map() // empId → Set<workItemId>
@@ -183,9 +194,27 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
 
   function consecutiveDaysBefore(empId, dayNum) {
     let streak = 0
-    for (let d = dayNum - 1; d >= 1; d--) {
-      if (assigned.has(`${empId}:${dateKey(year, month, d)}`)) streak++
-      else break
+    // 往前數，一路數到當月 1 號仍連續就切到上個月繼續（含跨年）；
+    // 資料只回溯一個月（back 最多 1），再往前沒有資料自然停止
+    let y = year
+    let m = month
+    let d = dayNum - 1
+    let back = 0
+    while (true) {
+      if (d < 1) {
+        back++
+        if (back > 1) break
+        if (m === 1) {
+          y--
+          m = 12
+        } else {
+          m--
+        }
+        d = daysInMonth(y, m)
+      }
+      if (!assigned.has(`${empId}:${dateKey(y, m, d)}`)) break
+      streak++
+      d--
     }
     return streak
   }
@@ -231,6 +260,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
   const unfilled = []
 
   for (let day = 1; day <= days; day++) {
+    if (closedSet.has(day)) continue
     const type = dayType(day)
     const usedToday = new Set()
     const assignedToday = {}

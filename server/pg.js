@@ -70,6 +70,8 @@ export async function ensureTabs(names) {
     stmts.push(`DROP INDEX IF EXISTS "index_1"`)
     // 班表總覽依月份查詢（ux_schedule_key 的前綴 (year,month) 已涵蓋 schedule；lock 表另建）
     stmts.push(`CREATE INDEX IF NOT EXISTS idx_schedule_locks_ym ON "schedule_locks" (year, month)`)
+    // 公休日依月份查詢
+    stmts.push(`CREATE INDEX IF NOT EXISTS idx_closed_days_ym ON "closed_days" (year, month)`)
     await client.query(stmts.join(';\n'))
   } finally {
     client.release()
