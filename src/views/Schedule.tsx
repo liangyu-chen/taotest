@@ -553,7 +553,7 @@ export default function Schedule() {
             </span>
           </div>
           <div className="cal-cell__closed">
-            <span className="cal-cell__closed-badge">公休</span>
+            <span className="cal-cell__closed-badge">💤 公休</span>
             {isAdmin && (
               <button
                 type="button"
@@ -902,7 +902,8 @@ export default function Schedule() {
             onClick={() => void applyClosed([...selectedDays], false)}
             title="解除公休日：恢復當天營業，自動排班會重新安排"
           >
-            🈺 解除公休日
+            <span className="icon-sq icon-sq--yellow" aria-hidden="true">営</span>
+            解除公休日
           </button>
           <button type="button" className="btn btn--small" onClick={() => setSelectedDays(new Set())}>
             取消選取
@@ -929,6 +930,12 @@ export default function Schedule() {
                 <i style={{ background: '#6b7280' }} />
                 沒空時段
               </span>
+              {workShifts.map((s) => (
+                <span key={s.code} className="legend__item">
+                  <i className="legend-dot--prefer" style={{ background: preferColor(s) }} />
+                  <ShiftIcon shift={s} /> 偏好{s.name}
+                </span>
+              ))}
               <span className="legend__item">
                 <i className="legend-stroke" />
                 當日已排班
@@ -942,23 +949,17 @@ export default function Schedule() {
                 人力/工作未滿足
               </span>
               <span className="legend__item">
-                <i className="legend-lock">🔒</i>
-                已鎖定（自動排班不更動）
-              </span>
-              <span className="legend__item">
                 <i className="legend-closed" />
                 公休日（不營業，自動排班跳過）
+              </span>
+              <span className="legend__item">
+                <i className="legend-lock">🔒</i>
+                已鎖定（自動排班不更動）
               </span>
               <span className="legend__item">
                 <i className="legend-selected" />
                 已選取
               </span>
-              {workShifts.map((s) => (
-                <span key={s.code} className="legend__item">
-                  <i className="legend-dot--prefer" style={{ background: preferColor(s) }} />
-                  <ShiftIcon shift={s} /> 偏好{s.name}
-                </span>
-              ))}
             </div>
           )}
 

@@ -433,6 +433,24 @@ code,
   font-size: calc(11.5px * var(--font-scale));
 }
 
+.icon-sq {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: calc(10px * var(--font-scale));
+  line-height: 1;
+}
+
+.icon-sq--yellow {
+  color: #b45309;
+  background: #fde68a;
+  border: 1px solid #f59e0b;
+}
+
 .btn--small {
   height: 28px;
   padding: 0 10px;
@@ -976,15 +994,15 @@ html.modal-open .content {
 }
 
 .cal-cell--selected {
-  border-color: var(--accent);
-  border-style: dashed;
-  box-shadow: 0 0 0 3px rgba(31, 110, 94, 0.28);
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 1px rgba(31, 110, 94, 0.35);
   cursor: pointer;
 }
 
 .cal-cell--selected.cal-cell--locked {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.32);
+  outline-color: #7c3aed;
+  box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.4);
 }
 
 .cal-cell--locked {
@@ -1037,15 +1055,16 @@ html[data-view="desktop"] .cal-cell--closed .cal-cell__week {
 .cal-cell__closed-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
+  gap: 5px;
+  padding: 5px 14px;
   border-radius: 999px;
-  font-size: calc(12.5px * var(--font-scale));
+  font-size: calc(13px * var(--font-scale));
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: #52525b;
-  background: rgba(120, 130, 140, 0.16);
-  border: 1px solid rgba(120, 130, 140, 0.4);
+  color: #7c6f5f;
+  background: linear-gradient(135deg, #fdf6e9, #fbeed7);
+  border: 1px solid rgba(180, 120, 40, 0.35);
+  box-shadow: 0 3px 8px rgba(180, 120, 40, 0.18);
 }
 
 html[data-view="desktop"] .cal-cell--locked .shift-chip,
@@ -1640,8 +1659,9 @@ button.shift-chip:not(.shift-chip--add):hover {
   width: 14px;
   height: 14px;
   border-radius: 4px;
-  border: 1px dashed var(--accent);
-  box-shadow: 0 0 0 1px rgba(31, 110, 94, 0.3);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px rgba(31, 110, 94, 0.35);
   background: rgba(31, 110, 94, 0.1);
 }
 
