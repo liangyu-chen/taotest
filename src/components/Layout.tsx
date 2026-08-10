@@ -82,9 +82,9 @@ export default function Layout({ children }: { children: ReactNode }) {
     { to: '/', label: '班表總覽', icon: '▦', adminOnly: false },
     { to: '/availability', label: '排休與時段', icon: '☼', adminOnly: false },
     { to: '/employees', label: '員工管理', icon: '☷', adminOnly: true },
-    { to: '/shifts', label: '班別與人力', icon: '⌛', adminOnly: true },
+    { to: '/shifts', label: '班別與人力', icon: '\u231B\uFE0E', adminOnly: true },
     { to: '/work-items', label: '工作項目', icon: '☑', adminOnly: true },
-    { to: '/settings', label: '排班規則', icon: '⚙', adminOnly: true },
+    { to: '/settings', label: '排班規則', icon: '\u2699\uFE0E', adminOnly: true },
     { to: '/users', label: '帳號管理', icon: '⚿', adminOnly: true },
   ].filter((item) => !item.adminOnly || isAdmin)
 
