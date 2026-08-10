@@ -1168,7 +1168,7 @@ export default function Schedule() {
               </ol>
             </section>
             <section>
-              <h4>早班（開店的第一個班）怎麼排</h4>
+              <h4>早班怎麼排</h4>
               <ul>
                 <li>
                   <b>平日早班</b>：先讓想上的人上；如果還缺人，會優先選「吧台、內場都會」的人來上。
