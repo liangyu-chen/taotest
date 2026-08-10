@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth'
 import { useChangePassword } from './ui'
+import logoUrl from '../assets/TaoLogo.png'
 
 // =============================================================
 // Layout.tsx —— 全站外框
@@ -96,7 +97,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="shell">
       <aside className="sidebar">
         <div className="sidebar__brand">
-          <span className="sidebar__mark">班</span>
+          <img className="sidebar__logo" src={logoUrl} alt="排班管理" />
           <div>
             <div className="sidebar__name">排班管理</div>
             <div className="sidebar__sub">ShiftPlanner</div>
