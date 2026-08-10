@@ -250,9 +250,12 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         if (hits > 0) s -= 200 * hits
       }
     }
-    // 非「平日早班」的班別（平日晚上、假日）加入隨機值，讓排班每次略有不同；
-    // 仍保留技能覆蓋的 pool 篩選，所以吧台/內場各有人負責的規則不受影響
-    if (!isWeekdayMorningShift(dayNum, shiftCode)) s += Math.random() * 250
+    // 隨機值：讓「完全同分」的人選每次略有不同（避免永遠照陣列順序取前面的人）。
+    // 平日早班用較小幅度（50）——「偏好 −500」「雙技能 −300」的優先權差距遠大於此，
+    // 所以偏好早班仍會優先、雙技能者仍會優先，只是同分時改為隨機。
+    // 其餘班別維持較大幅度（250），讓排班每次看起來略有不同。
+    if (isWeekdayMorningShift(dayNum, shiftCode)) s += Math.random() * 50
+    else s += Math.random() * 250
     s += index * 0.001
     return s
   }

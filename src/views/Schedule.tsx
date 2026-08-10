@@ -43,8 +43,89 @@ function chipTextColor(hex: string): string {
   const r = Number.parseInt(h.slice(0, 2), 16) / 255
   const g = Number.parseInt(h.slice(2, 4), 16) / 255
   const b = Number.parseInt(h.slice(4, 6), 16) / 255
-  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-  return lum > 0.5 ? '#2a2418' : '#ffffff'
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.62 ? '#2a2418' : '#ffffff'
+}
+
+// 元素進入畫面時回傳 true（只觸發一次）
+function useInView<T extends Element>(threshold = 0.3) {
+  const ref = useRef<T | null>(null)
+  const [inView, setInView] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setInView(true)
+      return
+    }
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) {
+          if (en.isIntersecting) {
+            setInView(true)
+            obs.disconnect()
+          }
+        }
+      },
+      { threshold },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [threshold])
+  return [ref, inView] as const
+}
+
+// 數字從 0 遞增到 target 的動畫（run 為 true 時開始）
+function useCountUp(target: number, run: boolean, duration = 900): number {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!run) return
+    let raf = 0
+    const t0 = performance.now()
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / duration)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setVal(Math.round(target * eased))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [run, target, duration])
+  return val
+}
+
+// 本月人力彙總的一列：名稱＋班數在上、彙總明細在中、進度條在下；進場時動畫
+function StatRow({
+  name,
+  color,
+  total,
+  max,
+  meta,
+}: {
+  name: string
+  color: string
+  total: number
+  max: number
+  meta: string
+}) {
+  const [ref, inView] = useInView<HTMLDivElement>(0.3)
+  const shown = useCountUp(total, inView)
+  const pct = max > 0 ? Math.min(100, (total / max) * 100) : 0
+  return (
+    <div ref={ref} className="stat-row">
+      <div className="stat-row__head">
+        <span className="stat-row__nameline">
+          <i className="emp-color-dot" style={{ background: color || '#6b7280' }} />
+          {name}
+        </span>
+        <span className="stat-row__num">
+          {shown} <em>班</em>
+        </span>
+      </div>
+      {meta && <div className="stat-row__meta">{meta}</div>}
+      <div className="stat-row__bar">
+        <div className="stat-row__fill" style={{ width: inView ? `${pct}%` : '0%' }} />
+      </div>
+    </div>
+  )
 }
 
 // 自訂 hook：管理「目前顯示的月份」以及該月份所需的所有資料。
@@ -354,14 +435,13 @@ export default function Schedule() {
   // 只算還在職的員工（active !== '0'）
   const activeEmployees = useMemo(() => employees.filter((e) => e.active !== '0'), [employees])
 
-  // 每月彙總：每位員工有幾次排休/沒空/偏好（顯示在下方「本月人力彙總」）
+  // 每月彙總：每位員工有幾次排休（顯示在下方「本月人力彙總」）
   const monthStat = useMemo(() => {
-    const map: Record<string, { off: number; unavail: number; prefer: number }> = {}
+    const map: Record<string, { off: number }> = {}
     for (const a of availability) {
-      const st = (map[a.employee_id] = map[a.employee_id] || { off: 0, unavail: 0, prefer: 0 })
-      if (a.status === 'off') st.off++
-      else if (a.status === 'unavailable') st.unavail++
-      else if (a.status) st.prefer++
+      if (a.status !== 'off') continue
+      const st = (map[a.employee_id] = map[a.employee_id] || { off: 0 })
+      st.off++
     }
     return map
   }, [availability])
@@ -381,20 +461,23 @@ export default function Schedule() {
     return Number.isFinite(h) && h < 15 ? '#F59E0B' : '#a78bfa'
   }
 
-  // 本月人力彙總的計算：每人排幾班、各班別排幾班、長條圖比例
+  // 本月人力彙總的計算：每人排幾班、每人每班別排幾班、各班別排幾班、長條圖比例
   const stats = useMemo(() => {
     const perEmp: Record<string, number> = {}
+    const perEmpShift: Record<string, Record<string, number>> = {}
     const perShift: Record<string, number> = {}
     for (const a of assignments) {
       perEmp[a.employee_id] = (perEmp[a.employee_id] || 0) + 1
       perShift[a.shift_code] = (perShift[a.shift_code] || 0) + 1
+      const e = (perEmpShift[a.employee_id] = perEmpShift[a.employee_id] || {})
+      e[a.shift_code] = (e[a.shift_code] || 0) + 1
     }
     const rows = employees
       .filter((e) => e.active !== '0')
       .map((e) => ({ employee: e, total: perEmp[e.id] || 0 }))
       .sort((a, b) => b.total - a.total || a.employee.name.localeCompare(b.employee.name, 'zh-Hant'))
     const max = Math.max(1, ...rows.map((r) => r.total))
-    return { perEmp, perShift, rows, max }
+    return { perEmp, perEmpShift, perShift, rows, max }
   }, [assignments, employees])
 
   const days = daysInMonth(year, month)
@@ -984,29 +1067,20 @@ export default function Schedule() {
             <div className="stats__grid">
               {stats.rows.map(({ employee, total }) => {
                 const st = monthStat[employee.id]
-                const extra = st
-                  ? [
-                      st.off ? `${st.off} 排休` : '',
-                      st.unavail ? `${st.unavail} 沒空` : '',
-                      st.prefer ? `${st.prefer} 偏好` : '',
-                    ]
-                      .filter(Boolean)
-                      .join('・')
-                  : ''
+                const shiftPart = workShifts
+                  .map((s) => `${stats.perEmpShift[employee.id]?.[s.code] || 0}${s.name}`)
+                  .filter((t) => !t.startsWith('0'))
+                  .join('·')
+                const meta = [shiftPart, st?.off ? `${st.off}排休` : ''].filter(Boolean).join('·')
                 return (
-                  <div key={employee.id} className="stat-row">
-                    <span className="stat-row__name">
-                      <span className="stat-row__nameline">
-                        <i className="emp-color-dot" style={{ background: employee.color || '#6b7280' }} />
-                        {employee.name}
-                      </span>
-                      {extra && <em>{extra}</em>}
-                    </span>
-                    <div className="stat-row__bar">
-                      <div className="stat-row__fill" style={{ width: `${(total / stats.max) * 100}%` }} />
-                    </div>
-                    <span className="stat-row__num">{total} 班</span>
-                  </div>
+                  <StatRow
+                    key={employee.id}
+                    name={employee.name}
+                    color={employee.color || '#6b7280'}
+                    total={total}
+                    max={stats.max}
+                    meta={meta}
+                  />
                 )
               })}
               {stats.rows.length === 0 && <p className="muted">尚未有員工資料</p>}
@@ -1014,7 +1088,7 @@ export default function Schedule() {
             <div className="stats__shifts">
               {workShifts.map((s) => (
                 <span key={s.code} className="stat-shift">
-                  <i style={{ background: s.color }} />
+                  <ShiftIcon shift={s} />
                   {s.name} 共 {stats.perShift[s.code] || 0} 班
                 </span>
               ))}

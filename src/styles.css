@@ -1699,24 +1699,24 @@ button.shift-chip:not(.shift-chip--add):hover {
 }
 
 .stat-row {
-  display: grid;
-  grid-template-columns: 96px 1fr 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-row__head {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
 }
 
-.stat-row__name {
+.stat-row__nameline {
   font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-  overflow: hidden;
-}
-
-.stat-row__nameline {
-  display: flex;
   align-items: center;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -1725,9 +1725,23 @@ button.shift-chip:not(.shift-chip--add):hover {
   margin-right: 6px;
 }
 
-.stat-row__name em {
+.stat-row__num {
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.stat-row__num em {
   font-style: normal;
   font-size: calc(10.5px * var(--font-scale));
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.stat-row__meta {
+  font-size: calc(11px * var(--font-scale));
   color: var(--muted);
   font-weight: 400;
   white-space: nowrap;
@@ -1746,14 +1760,7 @@ button.shift-chip:not(.shift-chip--add):hover {
   height: 100%;
   background: linear-gradient(90deg, var(--accent), #4a9c88);
   border-radius: 999px;
-  transition: width 0.4s ease;
-}
-
-.stat-row__num {
-  font-size: calc(12px * var(--font-scale));
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-  text-align: right;
+  transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .stats__shifts {
@@ -1771,12 +1778,6 @@ button.shift-chip:not(.shift-chip--add):hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.stat-shift i {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
 }
 
 /* ---------- Availability ---------- */
