@@ -312,6 +312,27 @@ code,
   margin-bottom: 18px;
 }
 
+.view__head-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.rules-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: calc(12px * var(--font-scale));
+  color: var(--accent-strong);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+.rules-link:hover {
+  color: var(--accent);
+}
+
 .view__title {
   font-family: "Noto Serif TC", serif;
   font-size: calc(17px * var(--font-scale));
@@ -711,6 +732,40 @@ html.modal-open .content {
   font-size: calc(13px * var(--font-scale));
   color: var(--muted);
   margin: 0 0 2px;
+}
+
+.rules-list section {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--panel-2);
+}
+
+.rules-list section:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.rules-list h4 {
+  margin: 0 0 8px;
+  font-size: calc(14px * var(--font-scale));
+  color: var(--text);
+}
+
+.rules-list ol,
+.rules-list ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: calc(13px * var(--font-scale));
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.rules-list li {
+  margin-bottom: 4px;
+}
+
+.rules-list b {
+  color: var(--text);
+  font-weight: 600;
 }
 
 /* ---------- Spinner / toast ---------- */

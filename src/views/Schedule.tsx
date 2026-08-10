@@ -215,6 +215,7 @@ export default function Schedule() {
   const [isDragging, setIsDragging] = useState(false)                          // 是否正在拖曳（用來停用其他班別的 hover 效果，只突顯被拖曳者）
   const [generating, setGenerating] = useState(false)                          // 是否正在自動排班
   const [confirmGenerate, setConfirmGenerate] = useState(false)                // 是否顯示「自動排班」確認彈窗
+  const [showRules, setShowRules] = useState(false)                            // 是否顯示「排班規則」說明彈窗
   const [confirmClosed, setConfirmClosed] = useState<number[] | null>(null)     // 準備設為公休日的日期（需二次確認）
   const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set())     // 被選取的日期（點格子選取，可多選）
   const { lockedDays, setLockedDays } = data
@@ -937,14 +938,19 @@ export default function Schedule() {
       <div className="view__head">
         <MonthNav year={year} month={month} onChange={(y, m) => { data.setYear(y); data.setMonth(m) }} />
         {isAdmin && (
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={generating}
-            onClick={() => setConfirmGenerate(true)}
-          >
-            {generating ? '⟳ 排班中…' : '⟳ 自動排班'}
-          </button>
+          <div className="view__head-actions">
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={generating}
+              onClick={() => setConfirmGenerate(true)}
+            >
+              {generating ? '⟳ 排班中…' : '⟳ 自動排班'}
+            </button>
+            <button type="button" className="rules-link" onClick={() => setShowRules(true)}>
+              自動排班規則說明
+            </button>
+          </div>
         )}
       </div>
 
@@ -1122,10 +1128,6 @@ export default function Schedule() {
       {isAdmin && (
         <p className="hint">
           提示：班別可直接點擊修改人力；格子下方圓點為各員工當日狀態，<b>拖曳圓點到「＋」或任一班別會跳出視窗選擇要加入的班別</b>。<b>拖曳已排班的姓名方塊到其他班別可直接「置換」班別</b>，<b>拖到下方「移除此人員」區塊則直接移除</b>。有「⚠」代表該員工已排班但當日標記排休或沒空、或連續上班天數已超過上限，請檢查。姓名後方的 {workItems.filter((w) => w.icon).map((w) => `${w.icon}${w.name}`).join('／')} 是該員工當日負責的工作項目。<b>日期格子有紅色虛線外框＋「⚠人力/工作未滿足」標籤</b>代表當日尚有班別未達需求人數，或該班的{workItems.map((w) => w.name).join('／')}工作項目還沒有人負責。<b>斜線底（公休）的日子當天不營業</b>，自動排班會跳過，設為公休日時既有排班會被清空。
-          {(() => {
-            const offCount = availability.filter((a) => a.status === 'off').length
-            return offCount > 0 ? ` 本月共有 ${offCount} 個排休記錄。` : ''
-          })()}
         </p>
       )}
 
@@ -1151,6 +1153,58 @@ export default function Schedule() {
           <span className="remove-dropzone__icon">🗑</span>
           移除此人員（{empById.get(removeDrag.employee_id)?.name || '?'}・{shiftById.get(removeDrag.shift_code)?.name || removeDrag.shift_code}）
         </div>
+      )}
+
+      {/* 排班規則說明彈窗 */}
+      {showRules && (
+        <Modal title="自動排班規則說明" onClose={() => setShowRules(false)}>
+          <div className="stack rules-list">
+            <section>
+              <h4>每天怎麼排</h4>
+              <ol>
+                <li>先排「今天想上這個班」的人。</li>
+                <li>還缺人時，讓「這個月還排得比較少」的人優先補上。</li>
+                <li>一人一天只能上一個班。</li>
+              </ol>
+            </section>
+            <section>
+              <h4>早班（開店的第一個班）怎麼排</h4>
+              <ul>
+                <li>
+                  <b>平日早班</b>：先讓想上的人上；如果還缺人，會優先選「吧台、內場都會」的人來上。
+                </li>
+                <li>
+                  <b>假日早班</b>（週末／例假日）：先讓想上的人上；缺人時就照「這個月排得比較少的人優先」來補。
+                </li>
+              </ul>
+            </section>
+            <section>
+              <h4>晚班怎麼排</h4>
+              <ul>
+                <li>
+                  <b>平日晚班</b>：先讓想上的人上；缺人時照「這個月排得比較少的人優先」來補。
+                </li>
+                <li>
+                  <b>假日晚班</b>（週末／例假日）：跟平日晚班一樣，先讓想上的人上，缺人時排得比較少的人優先補上。
+                </li>
+              </ul>
+            </section>
+            <section>
+              <h4>什麼時候不會排到</h4>
+              <ul>
+                <li>那天排休、或班別時間跟「沒空時段」撞到 → 不排。</li>
+                <li>連續上超過設定天數（如 6 天）→ 當天休息。</li>
+              </ul>
+            </section>
+            <section>
+              <h4>其他</h4>
+              <ul>
+                <li>每個班會盡量讓吧台、內場都有人負責；沒人會做的會跳出 ⚠ 提醒。</li>
+                <li>條件都一樣時用抽的，所以每次排出來可能略有不同。</li>
+              </ul>
+            </section>
+          </div>
+        </Modal>
       )}
 
       {/* 自動排班確認彈窗：避免誤觸，確認後才執行 */}
