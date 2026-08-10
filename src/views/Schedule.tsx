@@ -554,6 +554,19 @@ export default function Schedule() {
           </div>
           <div className="cal-cell__closed">
             <span className="cal-cell__closed-badge">公休</span>
+            {isAdmin && (
+              <button
+                type="button"
+                className="btn btn--tiny btn--ghost"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void applyClosed([day], false)
+                }}
+                title="解除公休日：恢復當天營業，自動排班會重新安排（不會動既有排班）"
+              >
+                解除公休
+              </button>
+            )}
           </div>
         </div>
       )
@@ -684,15 +697,10 @@ export default function Schedule() {
             }
             dropToAssign(day, slot.assignment!.shift_code, ev)
           }}
-          title={`${isAdmin && !isLocked ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : isLocked ? '此日已鎖定，無法更動排班。' : ''}${shift?.name || ''}・${name}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}${overConsecutive ? `（連續工作已 ${consecutiveDaysOf(slot.assignment!.employee_id, day)} 天，超過上限 ${maxConsecutiveWorkDays} 天）` : ''}`}
+          title={`${isAdmin && !isLocked ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : isLocked ? '此日已鎖定，無法更動排班。' : ''}${shift?.name || ''}・${name}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}`}
         >
-          {conflict && (
-            <span className="shift-chip__warn" title={`${name} 當日標記「${statusLabel(rec)}」`}>
-              ⚠
-            </span>
-          )}
-          {overConsecutive && (
-            <span className="shift-chip__warn shift-chip__warn--consec" title={`${name} 連續工作已 ${consecutiveDaysOf(slot.assignment!.employee_id, day)} 天，超過上限 ${maxConsecutiveWorkDays} 天`}>
+          {(conflict || overConsecutive) && (
+            <span className="shift-chip__warn" title={`${name}${conflict ? ` 當日標記「${statusLabel(rec)}」` : ' 連續上班天數已超過上限'}`}>
               ⚠
             </span>
           )}
@@ -820,19 +828,21 @@ export default function Schedule() {
           </div>
         )}
         {!isAdmin && slots.length === 0 && <div className="cal-cell__empty">—</div>}
-        {/* 鎖頭：固定在格子右下角，方便一眼看出哪幾天被鎖定 */}
+        {/* 右下角鎖頭：固定不動，方便一眼看出哪幾天被鎖定 */}
         {isAdmin && (
-          <button
-            type="button"
-            className={`cal-cell__lock${isLocked ? ' cal-cell__lock--on' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              void applyLock([day], !isLocked)
-            }}
-            title={isLocked ? '已鎖定：自動排班不會更動這天。點擊解除鎖定' : '鎖定這天：自動排班不會更動既有人員'}
-          >
-            {isLocked ? '🔒' : '🔓'}
-          </button>
+          <span className="cal-cell__corner">
+            <button
+              type="button"
+              className={`cal-cell__lock${isLocked ? ' cal-cell__lock--on' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                void applyLock([day], !isLocked)
+              }}
+              title={isLocked ? '已鎖定：自動排班不會更動這天。點擊解除鎖定' : '鎖定這天：自動排班不會更動既有人員'}
+            >
+              {isLocked ? '🔒' : '🔓'}
+            </button>
+          </span>
         )}
       </div>
     )
@@ -884,7 +894,7 @@ export default function Schedule() {
             onClick={() => setConfirmClosed([...selectedDays])}
             title="設為公休日：當天不營業，自動排班會跳過；既有排班人員會被清空"
           >
-            🏖 設為公休日
+            💤 設為公休日
           </button>
           <button
             type="button"
@@ -892,7 +902,7 @@ export default function Schedule() {
             onClick={() => void applyClosed([...selectedDays], false)}
             title="解除公休日：恢復當天營業，自動排班會重新安排"
           >
-            🏝 解除公休日
+            🈺 解除公休日
           </button>
           <button type="button" className="btn btn--small" onClick={() => setSelectedDays(new Set())}>
             取消選取
@@ -928,10 +938,6 @@ export default function Schedule() {
                 衝突
               </span>
               <span className="legend__item">
-                <i className="legend-warn legend-warn--consec">⚠</i>
-                連續上班超限
-              </span>
-              <span className="legend__item">
                 <i className="legend-short" />
                 人力/工作未滿足
               </span>
@@ -940,7 +946,7 @@ export default function Schedule() {
                 已鎖定（自動排班不更動）
               </span>
               <span className="legend__item">
-                <i className="legend-closed">🏖</i>
+                <i className="legend-closed" />
                 公休日（不營業，自動排班跳過）
               </span>
               <span className="legend__item">
@@ -1040,7 +1046,7 @@ export default function Schedule() {
 
       {isAdmin && (
         <p className="hint">
-          提示：班別可直接點擊修改人力；格子下方圓點為各員工當日狀態，<b>拖曳圓點到「＋」或任一班別會跳出視窗選擇要加入的班別</b>。<b>拖曳已排班的姓名方塊到其他班別可直接「置換」班別</b>，<b>拖到下方「移除此人員」區塊則直接移除</b>。有「⚠」代表該員工已排班但當日標記排休或沒空，請檢查；琥珀色「⚠」代表該員工連續上班天數已超過上限。姓名後方的 {workItems.filter((w) => w.icon).map((w) => `${w.icon}${w.name}`).join('／')} 是該員工當日負責的工作項目。<b>日期格子有紅色虛線外框＋「⚠人力/工作未滿足」標籤</b>代表當日尚有班別未達需求人數，或該班的{workItems.map((w) => w.name).join('／')}工作項目還沒有人負責。<b>標示「🏖 公休」的日子當天不營業</b>，自動排班會跳過，設為公休日時既有排班會被清空。
+          提示：班別可直接點擊修改人力；格子下方圓點為各員工當日狀態，<b>拖曳圓點到「＋」或任一班別會跳出視窗選擇要加入的班別</b>。<b>拖曳已排班的姓名方塊到其他班別可直接「置換」班別</b>，<b>拖到下方「移除此人員」區塊則直接移除</b>。有「⚠」代表該員工已排班但當日標記排休或沒空、或連續上班天數已超過上限，請檢查。姓名後方的 {workItems.filter((w) => w.icon).map((w) => `${w.icon}${w.name}`).join('／')} 是該員工當日負責的工作項目。<b>日期格子有紅色虛線外框＋「⚠人力/工作未滿足」標籤</b>代表當日尚有班別未達需求人數，或該班的{workItems.map((w) => w.name).join('／')}工作項目還沒有人負責。<b>斜線底（公休）的日子當天不營業</b>，自動排班會跳過，設為公休日時既有排班會被清空。
           {(() => {
             const offCount = availability.filter((a) => a.status === 'off').length
             return offCount > 0 ? ` 本月共有 ${offCount} 個排休記錄。` : ''
@@ -1080,7 +1086,7 @@ export default function Schedule() {
               確定要執行自動排班？將重新產生 <b>{year}</b> 年 <b>{month}</b> 月的班表，並覆蓋既有排班。
             </p>
             <p className="hint">
-              提示：可先用〈批次鎖定〉鎖定不想被更動的日期；已鎖定的天數不會被自動排班變更。公休日（🏖）當天不營業，自動排班會直接跳過。
+              提示：可先用〈批次鎖定〉鎖定不想被更動的日期；已鎖定的天數不會被自動排班變更。公休日當天不營業，自動排班會直接跳過。
             </p>
             <div className="modal__actions">
               <button type="button" className="btn" onClick={() => setConfirmGenerate(false)}>
@@ -1124,7 +1130,7 @@ export default function Schedule() {
                   void applyClosed(days, true)
                 }}
               >
-                🏖 設為公休日
+                💤 設為公休日
               </button>
             </div>
           </div>

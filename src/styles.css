@@ -427,6 +427,12 @@ code,
   border-color: transparent;
 }
 
+.btn--tiny {
+  height: 26px;
+  padding: 0 10px;
+  font-size: calc(11.5px * var(--font-scale));
+}
+
 .btn--small {
   height: 28px;
   padding: 0 10px;
@@ -1013,11 +1019,18 @@ html.modal-open .content {
   opacity: 0.55;
 }
 
+html[data-view="desktop"] .cal-cell--closed .cal-cell__day,
+html[data-view="desktop"] .cal-cell--closed .cal-cell__week {
+  cursor: pointer;
+}
+
 .cal-cell__closed {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  gap: 6px;
+  height: calc(100% - 30px);
   min-height: 44px;
 }
 
@@ -1033,11 +1046,6 @@ html.modal-open .content {
   color: #52525b;
   background: rgba(120, 130, 140, 0.16);
   border: 1px solid rgba(120, 130, 140, 0.4);
-}
-
-html[data-view="desktop"] .cal-cell--closed .cal-cell__day,
-html[data-view="desktop"] .cal-cell--closed .cal-cell__week {
-  cursor: pointer;
 }
 
 html[data-view="desktop"] .cal-cell--locked .shift-chip,
@@ -1077,6 +1085,22 @@ html[data-view="desktop"] .cal-cell--locked .cal-emp {
   opacity: 1;
   filter: none;
   background: rgba(124, 58, 237, 0.14);
+}
+
+/* 右下角鎖頭快捷 */
+.cal-cell__corner {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.cal-cell__corner .cal-cell__lock {
+  position: static;
 }
 
 .lock-toolbar,
@@ -1475,13 +1499,6 @@ button.shift-chip:not(.shift-chip--add):hover {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
 }
 
-/* 連續工作天數超過上限的警告：與「排休/沒空衝突」用不同底色區分 */
-.shift-chip__warn--consec {
-  color: #b45309;
-  background: #fffbeb;
-  box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.35);
-}
-
 .cal-cell__avail {
   display: flex;
   flex-direction: column;
@@ -1584,14 +1601,6 @@ button.shift-chip:not(.shift-chip--add):hover {
   color: #f87171;
 }
 
-/* 連續上班超限的圖例：琥珀色圓點，與「衝突」的紅色區分 */
-.legend__item i.legend-warn--consec {
-  color: #b45309;
-  background: #fffbeb;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.35);
-}
-
 .legend-short {
   width: 14px;
   height: 14px;
@@ -1612,15 +1621,10 @@ button.shift-chip:not(.shift-chip--add):hover {
 }
 
 .legend__item i.legend-closed {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
   width: 14px;
   height: 14px;
   border-radius: 4px;
-  font-size: calc(9px * var(--font-scale));
-  line-height: 1;
-  font-style: normal;
   background:
     repeating-linear-gradient(
       -45deg,
