@@ -2808,8 +2808,15 @@ button.shift-chip:not(.shift-chip--add):hover {
 }
 
 .login-bg {
+  /* iOS 即使 viewport-fit=cover，動態島上方的 unsafe 區域預設不會渲染
+     網頁內容（只塗 html/body 底色），所以照片會被「切在動態島下」。
+     用 -env(safe-area-inset-top) 把背景層往上拉進動態島區域；
+     底部靠 .login-page 額外 120px 餘量蓋住，不受影響。 */
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: calc(-1 * env(safe-area-inset-top, 0px));
+  bottom: 0;
   z-index: 0;
 }
 
