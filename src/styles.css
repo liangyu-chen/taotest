@@ -2866,12 +2866,15 @@ button.shift-chip:not(.shift-chip--add):hover {
 }
 
 /* 熊熊本體動畫（掛在 img 上，避免和外層的甩貼 transform 打架）：
-   氣到發紅閃兩下 → 接著像黏在玻璃上一樣微微壓著呼吸 */
+   氣到發紅閃兩下 → 接著像黏在玻璃上一樣微微壓著呼吸。
+   寬度貼齊登入卡片（400px／手機 100vw-28px），高度照 941:1672 比例
+   自然拉高，把圖片內的留白也吃回來。 */
 .jump-scare__bear-img {
   display: block;
-  height: min(68vh, 620px);
-  width: auto;
-  max-width: 88vw;
+  width: min(400px, calc(100vw - 40px));
+  max-width: 100%;
+  max-height: 88vh;
+  height: auto;
   object-fit: contain;
   animation:
     bear-angry 0.35s ease-in-out 0.95s 2,
@@ -3162,6 +3165,9 @@ button.shift-chip:not(.shift-chip--add):hover {
   html:not([data-view="desktop"]) .login-page {
     height: calc(100vh + 70px);
     padding: 14px;
+  }
+  html:not([data-view="desktop"]) .jump-scare__bear-img {
+    width: calc(100vw - 28px);
   }
   html:not([data-view="desktop"]) .sidebar {
     padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
@@ -3600,6 +3606,9 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .login-page {
     height: calc(100vh + 70px);
     padding: 14px;
+  }
+  html[data-view="mobile"] .jump-scare__bear-img {
+    width: calc(100vw - 28px);
   }
   html[data-view="mobile"] .sidebar {
     padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
