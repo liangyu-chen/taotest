@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import logoUrl from '../assets/TaoLogo.png'
 import bgUrl from '../assets/background.webp'
-import louisImage from '../assets/Louis.jpg'
+import louisPng from '../assets/Louis.png'
 
 // =============================================================
 // Login.tsx —— 登入頁
@@ -109,8 +109,11 @@ export default function Login() {
       {scare && (
         <div className="jump-scare" onClick={() => setScare(false)}>
           <div className="jump-scare__flash" />
-          <img className="jump-scare__img" src={louisImage} alt="" />
+          <div className="jump-scare__bear">
+            <img className="jump-scare__bear-img" src={louisPng} alt="熊熊" />
+          </div>
           <p className="jump-scare__msg">你想盜我帳號嗎!!!</p>
+          <p className="jump-scare__sub">熊熊整隻貼在你螢幕上瞪你</p>
           <span className="jump-scare__dismiss">點擊畫面關閉</span>
         </div>
       )}
