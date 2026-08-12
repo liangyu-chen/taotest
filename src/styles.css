@@ -2867,15 +2867,13 @@ button.shift-chip:not(.shift-chip--add):hover {
 
 /* 熊熊本體動畫（掛在 img 上，避免和外層的甩貼 transform 打架）：
    氣到發紅閃兩下 → 接著像黏在玻璃上一樣微微壓著呼吸。
-   寬度貼齊登入卡片（400px／手機 100vw-28px），高度照 941:1672 比例
-   自然拉高，把圖片內的留白也吃回來。 */
+   寬度鎖定=登入卡片寬度（400px／手機 100vw-28px），高度照 941:1672
+   比例自然拉高（圖片上方有 14% 透明留白，拉高剛好吃回來）。
+   不設 max-height/object-fit：那會把圖片縮到比框窄，兩側露白像沒對齊。 */
 .jump-scare__bear-img {
   display: block;
   width: min(400px, calc(100vw - 40px));
-  max-width: 100%;
-  max-height: 88vh;
   height: auto;
-  object-fit: contain;
   animation:
     bear-angry 0.35s ease-in-out 0.95s 2,
     bear-pressed 3s ease-in-out 1.8s infinite;
