@@ -27,15 +27,17 @@
   box-sizing: border-box;
 }
 
+/* html 不設固定高度：根元素會隨內容長高，背景花色與底色才能塗滿
+   整份文件（含捲動區與 iOS overscroll 的上下空白區）。
+   body/#root 用 min-height:100dvh 保證短頁也能填滿視口
+   （dvh 是絕對單位，不受「百分比高度對父元素的高度依賴」影響）。 */
 html {
-  height: 100%;
+  min-height: 100%;
 }
 
-/* body 用 min-height 而非 height：高度會隨內容長高，背景花色才會
-   塗滿整份文件（而不只第一個視口）。#root 同理，避免壓住內層高度。 */
 body,
 #root {
-  min-height: 100%;
+  min-height: 100dvh;
   margin: 0;
 }
 
