@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { useState, type CSSProperties, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import logoUrl from '../assets/TaoLogo.png'
@@ -16,26 +16,10 @@ const delay = (s: string) => ({ animationDelay: s }) as CSSProperties
 
 export default function Login() {
   const { login, user } = useAuth()
-  const pageRef = useRef<HTMLDivElement>(null)
   const [username, setUsername] = useState('taosuper')
   const [password, setPassword] = useState('taowucoffee')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-
-  // iOS Safari 一進入時網頁內容會被切在動態島下方（unsafe 區域不渲染內容）。
-  // 版面其實從 y=0 開始排（getBoundingClientRect().top 會是 0），所以不能
-  // 只靠 top>0 判斷；以 CSS 傳出的 --sat（env(safe-area-inset-top)）為準，
-  // 一進入就把視窗往下捲一個動態島高度，讓背景照片頂到畫面上緣。
-  useEffect(() => {
-    const el = pageRef.current
-    if (!el) return
-    const raf = requestAnimationFrame(() => {
-      const sat = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0
-      const top = Math.max(el.getBoundingClientRect().top, sat)
-      if (top > 0) window.scrollTo(0, top)
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [])
 
   // 若已登入，直接離開登入頁
   if (user) return <Navigate to="/" replace />
@@ -61,7 +45,7 @@ export default function Login() {
   }
 
   return (
-    <div className="login-page" ref={pageRef}>
+    <div className="login-page">
       <div className="login-bg" aria-hidden="true">
         <div className="login-bg__img" style={{ backgroundImage: `url(${bgUrl})` }} />
         <div className="login-bg__veil" />
