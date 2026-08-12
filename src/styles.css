@@ -2826,6 +2826,92 @@ button.shift-chip:not(.shift-chip--add):hover {
     radial-gradient(1100px 640px at 50% 30%, rgba(255, 209, 148, 0.18), transparent 62%);
 }
 
+/* ============ 彩蛋：帳號輸入 louis 時的跳嚇畫面 ============ */
+.jump-scare {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  animation: scare-screen-shake 0.9s ease-in-out both;
+}
+
+.jump-scare__flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  animation: scare-flash 0.18s ease-out 1 both;
+}
+
+.jump-scare__img {
+  position: relative;
+  max-width: min(88vw, 520px);
+  max-height: 64vh;
+  object-fit: contain;
+  filter: contrast(1.15) saturate(1.35);
+  animation: scare-jump 0.55s cubic-bezier(0.2, 2.2, 0.35, 1) 0.05s both;
+}
+
+.jump-scare__msg {
+  position: absolute;
+  left: 50%;
+  bottom: 9%;
+  transform: translateX(-50%);
+  margin: 0;
+  white-space: nowrap;
+  font-family: "Noto Serif TC", serif;
+  font-size: calc(30px * var(--font-scale));
+  font-weight: 900;
+  color: #ff2d2d;
+  letter-spacing: 3px;
+  text-shadow: 0 0 18px rgba(255, 45, 45, 0.9), 0 2px 0 #000, 0 0 42px #ff0000;
+  animation: scare-msg 0.3s ease-out 0.35s both;
+}
+
+.jump-scare__dismiss {
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  animation: scare-msg 0.3s ease-out 0.8s both;
+}
+
+@keyframes scare-flash {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes scare-jump {
+  0%   { transform: scale(0.15) rotate(-8deg) translateY(60px); opacity: 0.2; }
+  45%  { transform: scale(1.12) rotate(3deg) translateY(-8px); opacity: 1; }
+  65%  { transform: scale(0.96) rotate(-2deg) translateY(3px); }
+  85%  { transform: scale(1.05) rotate(1.5deg) translateY(-2px); }
+  100% { transform: scale(1) rotate(0deg) translateY(0); }
+}
+
+@keyframes scare-screen-shake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-6px, 4px); }
+  20% { transform: translate(6px, -5px); }
+  30% { transform: translate(-7px, -4px); }
+  40% { transform: translate(5px, 6px); }
+  50% { transform: translate(-5px, 3px); }
+  60% { transform: translate(7px, -3px); }
+  70% { transform: translate(-4px, -6px); }
+  80% { transform: translate(5px, 5px); }
+  90% { transform: translate(-3px, 2px); }
+}
+
+@keyframes scare-msg {
+  from { opacity: 0; transform: translateX(-50%) scale(0.6); }
+  60%  { opacity: 1; transform: translateX(-50%) scale(1.08); }
+  to   { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
 /* 照片只做模糊→清晰的對焦效果，不再動 opacity：
    iOS Safari 對含 filter 的動畫常會凍結/掉幀，
    opacity 停在半透明時米色底色會從照片下透出（上下尤其明顯）。 */

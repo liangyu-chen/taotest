@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import logoUrl from '../assets/TaoLogo.png'
 import bgUrl from '../assets/background.webp'
+import louisImage from '../assets/Louis.jpg'
 
 // =============================================================
 // Login.tsx —— 登入頁
@@ -20,6 +21,7 @@ export default function Login() {
   const [password, setPassword] = useState('taowucoffee')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [scare, setScare] = useState(false)
 
   // 若已登入，直接離開登入頁
   if (user) return <Navigate to="/" replace />
@@ -34,6 +36,11 @@ export default function Login() {
       setError('請在兩個欄位輸入帳號與密碼')
       return
     }
+    // 彩蛋：帳號是 louis 就跳嚇人畫面，不真的登入
+    if (u.toLowerCase() === 'louis') {
+      setScare(true)
+      return
+    }
     setBusy(true)
     try {
       await login(u, p) // 成功後 auth.tsx 的 user 更新，這裡自動觸發「已登入 → 導回首頁」
@@ -45,7 +52,8 @@ export default function Login() {
   }
 
   return (
-    <div className="login-page">
+    <>
+      <div className="login-page">
       <div className="login-bg" aria-hidden="true">
         <div className="login-bg__img" style={{ backgroundImage: `url(${bgUrl})` }} />
         <div className="login-bg__veil" />
@@ -96,6 +104,16 @@ export default function Login() {
           </button>
         </form>
       </div>
-    </div>
+      </div>
+
+      {scare && (
+        <div className="jump-scare" onClick={() => setScare(false)}>
+          <div className="jump-scare__flash" />
+          <img className="jump-scare__img" src={louisImage} alt="" />
+          <p className="jump-scare__msg">你想盜我帳號嗎!!!</p>
+          <span className="jump-scare__dismiss">點擊畫面關閉</span>
+        </div>
+      )}
+    </>
   )
 }
