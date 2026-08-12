@@ -2783,9 +2783,11 @@ button.shift-chip:not(.shift-chip--add):hover {
 .login-page {
   position: relative;
   overflow: hidden;
-  height: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* 高度直接用 100dvh（100vh 兜底），不依賴 #root 的高度；
+     #root 是 min-height，height:100% 會解析成 auto 導致本體
+     縮成內容高度，上下露出 body 的米色背景。 */
+  height: 100vh;
+  height: 100dvh;
   width: 100%;
   display: flex;
   align-items: center;
