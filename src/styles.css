@@ -2784,9 +2784,11 @@ button.shift-chip:not(.shift-chip--add):hover {
   /* v1.2.9 的 position:fixed 在 iPhone Safari 上表現異常，回退 v1.2.8 的
      height:100vh 做法。實機上 100vh 只比「可見區域」多一點點，會露出米色；
      在 100vh 之上再加安全區高度與額外餘量，讓登入頁延伸到動態島下方與
-     網址列後方（多出部分會有滾輪，可接受）。 */
+     網址列後方（多出部分會有滾輪，可接受）。
+     不能設 overflow:hidden：它會把 .login-bg 的 -env(safe-area-inset-top)
+     負位移與 .login-bg__img 的 inset:-48px 全部裁掉，照片才一直切在
+     動態島下。 */
   position: relative;
-  overflow: hidden;
   height: 100vh;
   height: calc(100vh + env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 120px);
   width: 100%;
