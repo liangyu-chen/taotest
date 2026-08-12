@@ -34,6 +34,18 @@ body,
   margin: 0;
 }
 
+/* 背景花色同步掛到 html：手機版整頁捲動時，html 是根元素，
+   背景會畫滿整份文件（含超出視口的捲動區與 overscroll），
+   避免首頁內容較長時捲到下方露出白底。 */
+html {
+  background:
+    radial-gradient(rgba(120, 100, 60, 0.06) 1px, transparent 1px),
+    radial-gradient(1000px 600px at 15% 10%, rgba(31, 110, 94, 0.10), transparent 60%),
+    radial-gradient(800px 500px at 90% 85%, rgba(180, 83, 9, 0.12), transparent 55%),
+    var(--bg);
+  background-size: 22px 22px, 100% 100%, 100% 100%, 100% 100%;
+}
+
 body {
   font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
   font-size: calc(15px * var(--font-scale));
