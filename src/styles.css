@@ -2781,8 +2781,7 @@ button.shift-chip:not(.shift-chip--add):hover {
    最終停在輕柔微焦的狀態，半透明毛玻璃卡片隨之浮現。 */
 
 .login-page {
-  /* 基礎高度為 100vh；手機版才在多出的 50px 蓋過 iOS 網址列。
-     overflow:hidden 裁掉 .login-bg__img 的 -48px 外擴，避免桌機多出滾輪。 */
+  /* 基礎高度 100vh；手機版再多 50px 蓋過 iOS 網址列。 */
   position: relative;
   height: 100vh;
   width: 100%;
@@ -2790,14 +2789,6 @@ button.shift-chip:not(.shift-chip--add):hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 與站內其他頁面一致的花色底：即使 iOS 上照片特效異常/未覆蓋，
-     底層也是有點點紋理的底色，不會出現整塊平米色。 */
-  background:
-    radial-gradient(rgba(120, 100, 60, 0.06) 1px, transparent 1px),
-    radial-gradient(1000px 600px at 15% 10%, rgba(31, 110, 94, 0.10), transparent 60%),
-    radial-gradient(800px 500px at 90% 85%, rgba(180, 83, 9, 0.12), transparent 55%),
-    var(--bg);
-  background-size: 22px 22px, 100% 100%, 100% 100%, 100% 100%;
   padding: 20px;
 }
 
@@ -2808,8 +2799,7 @@ button.shift-chip:not(.shift-chip--add):hover {
 }
 
 .login-bg__img {
-  /* 只有上下外擴（避免模糊／縮放時露出邊緣），左右貼齊頁面寬度——
-     inset:-48px 連左右也外擴，會讓整頁出現左右滾輪。 */
+  /* 上下外擴避免縮放時露出邊緣；左右貼齊以免橫向滾輪 */
   position: absolute;
   left: 0;
   right: 0;
