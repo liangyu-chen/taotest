@@ -2544,35 +2544,79 @@ button.shift-chip:not(.shift-chip--add):hover {
   color: var(--danger);
 }
 
-/* ---------- Login ---------- */
+/* ---------- Login ----------
+   毛玻璃聚焦揭幕：背景照片先模糊成一團光，載入後漸進對焦清晰，
+   最終停在輕柔微焦的狀態，半透明毛玻璃卡片隨之浮現。 */
 
 .login-page {
+  position: relative;
+  overflow: hidden;
   height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   width: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(rgba(120, 100, 60, 0.06) 1px, transparent 1px),
-    radial-gradient(1000px 600px at 15% 10%, rgba(31, 110, 94, 0.10), transparent 60%),
-    radial-gradient(800px 500px at 90% 85%, rgba(180, 83, 9, 0.12), transparent 55%),
-    var(--bg);
-  background-size: 22px 22px, 100% 100%, 100% 100%, 100% 100%;
+  background: var(--bg);
   padding: 20px;
 }
 
+.login-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.login-bg__img {
+  position: absolute;
+  inset: -48px; /* 外擴，避免模糊／縮放時露出邊緣 */
+  background-size: cover;
+  background-position: center;
+  animation: clear-in 1.5s ease-out 0.15s both;
+}
+
+/* 霜層：定住的輕透白霧，柔化照片、避免「太清晰太重」 */
+.login-bg__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.14) 100%);
+  opacity: 0;
+  animation: frost-veil 1.5s ease-out 0.15s both;
+}
+
+.login-bg__tint {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(30, 22, 12, 0.34) 0%, rgba(30, 22, 12, 0.08) 42%, rgba(30, 22, 12, 0.38) 100%),
+    radial-gradient(1100px 640px at 50% 30%, rgba(255, 209, 148, 0.18), transparent 62%);
+}
+
+@keyframes clear-in {
+  0%   { filter: blur(34px) brightness(0.72) saturate(0.65); opacity: 0; transform: scale(1.14); }
+  32%  { opacity: 1; }
+  100% { filter: blur(5px) brightness(0.94) saturate(0.96); transform: scale(1); }
+}
+
+@keyframes frost-veil {
+  0%   { opacity: 0; }
+  100% { opacity: 0.16; }
+}
+
 .login-card {
+  position: relative;
+  z-index: 1;
   width: 400px;
   max-width: 100%;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: rgba(255, 252, 244, 0.82);
+  backdrop-filter: blur(16px) saturate(1.25);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 18px;
   padding: 34px 34px 30px;
-  box-shadow: var(--shadow);
-  animation: rise 0.25s ease-out;
+  box-shadow: 0 24px 60px rgba(20, 14, 6, 0.32);
+  animation: rise 0.5s ease-out 0.35s both;
 }
 
 .login-brand {
@@ -2587,8 +2631,9 @@ button.shift-chip:not(.shift-chip--add):hover {
   height: 76px;
   object-fit: contain;
   border-radius: 16px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
   margin-bottom: 16px;
+  animation: login-rise 0.5s ease-out both;
 }
 
 .login-brand__name {
@@ -2597,12 +2642,59 @@ button.shift-chip:not(.shift-chip--add):hover {
   font-weight: 900;
   letter-spacing: 1.5px;
   margin: 0;
+  animation: login-rise 0.5s ease-out both;
+}
+
+@keyframes login-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
   gap: 13px;
+}
+
+.login-form > .field {
+  animation: login-rise 0.5s ease-out both;
+}
+
+/* 登入按鈕：實色琥珀（只影響登入頁，系統其他頁維持品牌墨綠） */
+.login-form .btn--primary {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #fff;
+  animation: login-rise 0.5s ease-out both;
+}
+
+.login-form .btn--primary:hover:not(:disabled) {
+  background: #92400e;
+  border-color: #92400e;
+  color: #fff;
+}
+
+.login-form .btn--primary:active:not(:disabled) {
+  background: #78350f;
+  border-color: #78350f;
+}
+
+.login-form .btn--primary:focus-visible {
+  outline: 3px solid rgba(180, 83, 9, 0.35);
+  outline-offset: 2px;
+}
+
+/* 無障礙：偏好減少動畫時全部停用 */
+@media (prefers-reduced-motion: reduce) {
+  .login-page .login-bg__img,
+  .login-page .login-bg__veil,
+  .login-page .login-card,
+  .login-page .login-brand__logo,
+  .login-page .login-brand__name,
+  .login-page .login-form > .field,
+  .login-page .login-form .btn--primary {
+    animation: none !important;
+  }
 }
 
 /* ---------- Responsive ---------- */
