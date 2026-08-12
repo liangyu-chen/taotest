@@ -2781,10 +2781,12 @@ button.shift-chip:not(.shift-chip--add):hover {
    最終停在輕柔微焦的狀態，半透明毛玻璃卡片隨之浮現。 */
 
 .login-page {
-  /* 基礎高度為 100vh；手機版才在多出的 100px 蓋過 iOS 網址列。 */
+  /* 基礎高度為 100vh；手機版才在多出的 50px 蓋過 iOS 網址列。
+     overflow:hidden 裁掉 .login-bg__img 的 -48px 外擴，避免桌機多出滾輪。 */
   position: relative;
   height: 100vh;
   width: 100%;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3035,7 +3037,7 @@ button.shift-chip:not(.shift-chip--add):hover {
     min-height: 100dvh;
   }
   html:not([data-view="desktop"]) .login-page {
-    height: calc(100vh + 100px);
+    height: calc(100vh + 50px);
     padding: 14px;
   }
   html:not([data-view="desktop"]) .sidebar {
@@ -3473,7 +3475,7 @@ button.shift-chip:not(.shift-chip--add):hover {
     min-height: 100dvh;
   }
   html[data-view="mobile"] .login-page {
-    height: calc(100vh + 100px);
+    height: calc(100vh + 50px);
     padding: 14px;
   }
   html[data-view="mobile"] .sidebar {
