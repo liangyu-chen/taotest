@@ -5,7 +5,7 @@ import { Field, Spinner, toast } from '../components/ui'
 
 // =============================================================
 // Settings.tsx —— 排班規則設定（管理員）
-// 營業時間、正職/工讀每班時數、例假日清單。
+// 連續工作天數上限、例假日清單。
 // 修改的內容暫存在本頁的 settings state，按「儲存設定」才一次寫回後端。
 // =============================================================
 
@@ -74,35 +74,6 @@ export default function Settings() {
         <Spinner label="載入設定中…" />
       ) : (
         <>
-          <section className="panel">
-            <h3 className="panel__title">營業與班表</h3>
-            <div className="form-grid">
-              <Field label="每日開始營業時間">
-                <input type="time" value={cfg.work_start} onChange={(e) => set('work_start', e.target.value)} />
-              </Field>
-              <Field label="每日結束營業時間">
-                <input type="time" value={cfg.work_end} onChange={(e) => set('work_end', e.target.value)} />
-              </Field>
-            </div>
-            <p className="hint">此時間為資訊用途；實際班別起訖時間請在〈班別與人力〉調整。</p>
-          </section>
-
-          <section className="panel">
-            <h3 className="panel__title">排班時數規則</h3>
-            <div className="form-grid">
-              <Field label="正職每班固定時數（小時）">
-                <input type="number" min={1} max={24} value={cfg.fulltime_shift_hours} onChange={(e) => set('fulltime_shift_hours', e.target.value)} />
-              </Field>
-              <Field label="工讀每班預設時數（小時）">
-                <input type="number" min={1} max={24} value={cfg.parttime_shift_hours} onChange={(e) => set('parttime_shift_hours', e.target.value)} />
-              </Field>
-            </div>
-            <p className="hint">
-              工讀可依員工在〈員工管理〉個別覆寫「每班時數」；正職每班時數以此處設定為準。
-              工讀無每週時數上限，排班時只要有空就盡量安排，並依「每班時數×當月天數」比例公平輪班。
-            </p>
-          </section>
-
           <section className="panel">
             <h3 className="panel__title">連續工作天數上限</h3>
             <div className="form-grid">

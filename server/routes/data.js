@@ -124,6 +124,12 @@ router.get('/employees', requireAuth, async (_req, res, next) => {
       ].filter((s) => s.name)
       return { ...e, skills }
     })
+    // 員工名單／行事曆／彙總／匯出統一依「排序」欄位顯示（未設定時依 id）
+    enriched.sort((a, b) => {
+      const sa = Number(a.sort) || Number(a.id) || 0
+      const sb = Number(b.sort) || Number(b.id) || 0
+      return sa - sb || String(a.name).localeCompare(String(b.name), 'zh-Hant')
+    })
     res.json({ employees: enriched })
   } catch (e) {
     next(e)
@@ -148,21 +154,23 @@ function normalizeSkillIds(skills) {
 
 router.post('/employees', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const { name, employee_no, employee_type, shift_hours, weekly_hours, color, skills } = req.body || {}
+    const { name, employee_no, employee_type, shift_hours, weekly_hours, color, sort, skills } = req.body || {}
     if (!name) return res.status(400).json({ error: '員工姓名為必填' })
     const rows = await readTable('employees')
     const colorVal = String(color ?? '').trim()
     const finalColor = colorVal || pickFreeColor(rows)
     const colorErr = finalColor ? validateEmployeeColor(rows, finalColor) : ''
     if (colorErr) return res.status(400).json({ error: colorErr })
+    const id = String(nextId(rows))
     const row = [
-      String(nextId(rows)),
+      id,
       String(name).trim(),
       String(employee_no || '').trim(),
       employee_type === 'fulltime' ? 'fulltime' : 'parttime',
       String(shift_hours ?? ''),
       String(weekly_hours ?? ''),
       finalColor,
+      String(sort ?? id).trim(),
       '1',
       new Date().toISOString(),
     ]
@@ -182,12 +190,13 @@ router.put('/employees/:id', requireAuth, requireAdmin, async (req, res, next) =
     const rows = await readTable('employees')
     const idx = rows.findIndex((e) => e.id === req.params.id)
     if (idx === -1) return res.status(404).json({ error: '員工不存在' })
-    const { name, employee_no, employee_type, shift_hours, weekly_hours, active, color, skills } = req.body || {}
+    const { name, employee_no, employee_type, shift_hours, weekly_hours, active, color, sort, skills } = req.body || {}
     if (name !== undefined) rows[idx].name = String(name)
     if (employee_no !== undefined) rows[idx].employee_no = String(employee_no)
     if (employee_type !== undefined) rows[idx].employee_type = employee_type === 'fulltime' ? 'fulltime' : 'parttime'
     if (shift_hours !== undefined) rows[idx].shift_hours = String(shift_hours)
     if (weekly_hours !== undefined) rows[idx].weekly_hours = String(weekly_hours)
+    if (sort !== undefined) rows[idx].sort = String(sort)
     if (active !== undefined) rows[idx].active = active ? '1' : '0'
     if (color !== undefined) {
       const colorVal = String(color).trim()

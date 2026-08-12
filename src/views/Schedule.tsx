@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import {
+  compareEmployees,
   dateKey,
   dayTypeOf,
   daysInMonth,
@@ -19,7 +20,7 @@ import {
 } from '../types'
 import { useAuth } from '../auth'
 import MonthNav from '../components/MonthNav'
-import { Modal, Spinner, toast } from '../components/ui'
+import { Modal, Field, Spinner, toast } from '../components/ui'
 import { ShiftIcon } from '../components/icons'
 
 // =============================================================
@@ -90,6 +91,21 @@ function useCountUp(target: number, run: boolean, duration = 900): number {
     return () => cancelAnimationFrame(raf)
   }, [run, target, duration])
   return val
+}
+
+// 時數格式化：以半小時為單位，四捨五入到最近的 0.5，並固定顯示一位小數（8.0 / 8.5）
+function fmtHours(h: number): string {
+  const r = Math.round(h * 2) / 2
+  return r.toFixed(1)
+}
+
+// 「HH:MM」→ 當天幾分鐘（0–24:00，24:00 = 1440）；格式不對回傳 null
+function timeToMin(t?: string): number | null {
+  if (!t) return null
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t)
+  if (!m) return null
+  const h = Number(m[1])
+  return h >= 0 && h <= 24 ? h * 60 + Number(m[2]) : null
 }
 
 // 本月人力彙總的一列：名稱＋班數在上、彙總明細在中、進度條在下；進場時動畫
@@ -221,6 +237,10 @@ export default function Schedule() {
   const [dropTarget, setDropTarget] = useState<string | null>(null)            // 拖曳中目前停在哪個格子（用來加亮「＋」或班別）
   const [removeDrag, setRemoveDrag] = useState<{ day: number; shift_code: string; employee_id: string } | null>(null) // 拖曳移除中的人員
   const [removeDragOver, setRemoveDragOver] = useState(false) // 拖曳中的人員是否正指在垃圾桶上（用來亮起垃圾桶）
+  const [swapEdit, setSwapEdit] = useState<{
+    src: { day: number; shift_code: string; employee_id: string; start_time?: string; end_time?: string }
+    toShiftCode: string
+  } | null>(null) // 拖曳換班時等待編輯時段的彈窗資料
   const [isDragging, setIsDragging] = useState(false)                          // 是否正在拖曳（用來停用其他班別的 hover 效果，只突顯被拖曳者）
   const [generating, setGenerating] = useState(false)                          // 是否正在自動排班
   const [confirmGenerate, setConfirmGenerate] = useState(false)                // 是否顯示「自動排班」確認彈窗
@@ -338,7 +358,7 @@ export default function Schedule() {
     return m
   }, [shiftTypes])
 
-  // 上午/下午區域拖曳時的預設班別：
+  // 早班/晚班區域拖曳時的預設班別：
   // 把「1,2」這種逗號分隔的工作項目 id 字串轉成 WorkItem 列表（供姓名後方顯示）。
   // 一律依 workItems 的排序（工作項目管理頁的 sort）顯示，避免存檔順序不同導致圖示亂跳
   const workItemsOf = (raw?: string): WorkItem[] => {
@@ -432,6 +452,10 @@ export default function Schedule() {
       const slots = (map[a.day] = map[a.day] || [])
       slots.push({ assignment: a, employee: empById.get(a.employee_id) })
     }
+    // 行事曆內已排班人員依員工排序顯示（未設定排序時依員工 id）
+    for (const slots of Object.values(map)) {
+      slots.sort((x, y) => compareEmployees(x.employee, y.employee))
+    }
     return map
   }, [assignments, empById])
 
@@ -442,8 +466,11 @@ export default function Schedule() {
     return m
   }, [availability])
 
-  // 只算還在職的員工（active !== '0'）
-  const activeEmployees = useMemo(() => employees.filter((e) => e.active !== '0'), [employees])
+  // 只算還在職的員工（active !== '0'），依員工排序排列（行事曆下方圓點用）
+  const activeEmployees = useMemo(
+    () => employees.filter((e) => e.active !== '0').sort(compareEmployees),
+    [employees],
+  )
 
   // 每月彙總：每位員工有幾次排休（顯示在下方「本月人力彙總」）
   const monthStat = useMemo(() => {
@@ -471,24 +498,43 @@ export default function Schedule() {
     return Number.isFinite(h) && h < 15 ? '#F59E0B' : '#a78bfa'
   }
 
-  // 本月人力彙總的計算：每人排幾班、每人每班別排幾班、各班別排幾班、長條圖比例
+  // 本月人力彙總的計算：每人排幾班、每人每班別排幾班、各班別排幾班、每人時數、總時數、長條圖比例
   const stats = useMemo(() => {
     const perEmp: Record<string, number> = {}
     const perEmpShift: Record<string, Record<string, number>> = {}
     const perShift: Record<string, number> = {}
+    const perEmpHours: Record<string, number> = {}
+    let totalHours = 0
+    const shiftByCode = new Map(shiftTypes.map((s) => [s.code, s]))
+    const toMin = (t?: string): number | null => {
+      if (!t) return null
+      const m = /^(\d{1,2}):(\d{2})$/.exec(t)
+      if (!m) return null
+      const h = Number(m[1])
+      return h >= 0 && h <= 24 ? h * 60 + Number(m[2]) : null
+    }
     for (const a of assignments) {
       perEmp[a.employee_id] = (perEmp[a.employee_id] || 0) + 1
       perShift[a.shift_code] = (perShift[a.shift_code] || 0) + 1
       const e = (perEmpShift[a.employee_id] = perEmpShift[a.employee_id] || {})
       e[a.shift_code] = (e[a.shift_code] || 0) + 1
+      // 時段若尚未存進該筆排班（舊資料），退回班別的預設時段來計算
+      const shift = shiftByCode.get(a.shift_code)
+      const sm = toMin(a.start_time || shift?.start_time)
+      const em = toMin(a.end_time || shift?.end_time)
+      if (sm != null && em != null && em > sm) {
+        const h = (em - sm) / 60
+        perEmpHours[a.employee_id] = (perEmpHours[a.employee_id] || 0) + h
+        totalHours += h
+      }
     }
     const rows = employees
       .filter((e) => e.active !== '0')
       .map((e) => ({ employee: e, total: perEmp[e.id] || 0 }))
-      .sort((a, b) => b.total - a.total || a.employee.name.localeCompare(b.employee.name, 'zh-Hant'))
+      .sort((a, b) => compareEmployees(a.employee, b.employee))
     const max = Math.max(1, ...rows.map((r) => r.total))
-    return { perEmp, perEmpShift, perShift, rows, max }
-  }, [assignments, employees])
+    return { perEmp, perEmpShift, perShift, perEmpHours, totalHours, rows, max }
+  }, [assignments, employees, shiftTypes])
 
   const days = daysInMonth(year, month)
   const offset = firstDayOffset(year, month)
@@ -548,22 +594,17 @@ export default function Schedule() {
   }
 
   // 置換：把某員工從原班別「移動」到目標班別（限同一天）。
-  // 後端 action:'move' 直接把該列 shift_code 改成目標班（原子更新，note/work_item 留在原列）；
+  // 因每筆排班都帶「當天實際時段」，拖曳換班時需先彈窗確認/編輯時段，
+  // 完成後再送後端 action:'move'（該列 shift_code 與時段原子更新，note/work_item 留在原列）；
   // 成功後本機立即更新畫面，背景只重抓班表對齊後端。
-  const swapAssignment = async (
-    src: { day: number; shift_code: string; employee_id: string; note?: string; work_item?: string },
-    dst: { day: number; shift_code: string },
+  const finishSwap = async (
+    src: { day: number; shift_code: string; employee_id: string },
+    toShiftCode: string,
+    startTime: string,
+    endTime: string,
   ) => {
-    if (src.day !== dst.day) {
-      toast('只能在同一日內置換班別', 'error')
-      return
-    }
     if (lockedDays.includes(src.day)) {
       toast('此日已鎖定，無法更動排班', 'error')
-      return
-    }
-    if (src.shift_code === dst.shift_code) {
-      setRemoveDrag(null)
       return
     }
     const emp = empById.get(src.employee_id)
@@ -575,9 +616,11 @@ export default function Schedule() {
           month,
           day: src.day,
           shift_code: src.shift_code,
-          to_shift_code: dst.shift_code,
+          to_shift_code: toShiftCode,
           employee_id: src.employee_id,
           action: 'move',
+          start_time: startTime,
+          end_time: endTime,
         },
       })
     } catch (err) {
@@ -587,11 +630,11 @@ export default function Schedule() {
     data.setAssignments((prev) =>
       prev.map((a) =>
         a.day === src.day && a.shift_code === src.shift_code && a.employee_id === src.employee_id
-          ? { ...a, shift_code: dst.shift_code }
+          ? { ...a, shift_code: toShiftCode, start_time: startTime, end_time: endTime }
           : a,
       ),
     )
-    toast(`已將「${emp?.name || '該員工'}」置換到 ${shiftById.get(dst.shift_code)?.name || dst.shift_code}`)
+    toast(`已將「${emp?.name || '該員工'}」置換到 ${shiftById.get(toShiftCode)?.name || toShiftCode}`)
     void data.reload({ silent: true, light: true })
   }
 
@@ -605,13 +648,22 @@ export default function Schedule() {
     const isSelected = selectedDays.has(day)
     const weekday = WEEKDAYS[(offset + day - 1) % 7]
     const scheduledEmpIds = new Set(slots.map((s) => s.assignment!.employee_id))
-    // 依班別開始時間判斷上午(<15點)或下午，把格子分成兩半
-    const isAm = (shift?: ShiftType) => {
-      const h = shift?.start_time ? Number(shift.start_time.split(':')[0]) : NaN
+    // 依班別時段把格子分成 早班(<15點) / 晚班 兩半；有「當天實際時段」優先採用
+    const isAm = (assign?: Assignment, shift?: ShiftType) => {
+      const raw = assign?.start_time || shift?.start_time
+      const h = raw ? Number(raw.split(':')[0]) : NaN
       return Number.isFinite(h) && h < 15
     }
-    const amSlots = slots.filter((s) => isAm(shiftById.get(s.assignment!.shift_code)))
-    const pmSlots = slots.filter((s) => !isAm(shiftById.get(s.assignment!.shift_code)))
+    const amSlots = slots.filter((s) => isAm(s.assignment, shiftById.get(s.assignment!.shift_code)))
+    const pmSlots = slots.filter((s) => !isAm(s.assignment, shiftById.get(s.assignment!.shift_code)))
+
+    // 某筆排班的顯示時段：優先當天實際時段，缺省時用班別預設時段
+    const timeOf = (a: Assignment) => {
+      const shift = shiftById.get(a.shift_code)
+      const start = a.start_time || shift?.start_time || ''
+      const end = a.end_time || shift?.end_time || ''
+      return start && end ? `${start}–${end}` : ''
+    }
 
     // 公休日：當天不營業，直接顯示公休標記，不檢查人力/工作項目
     if (isClosed) {
@@ -725,6 +777,8 @@ export default function Schedule() {
                 employee_id: slot.assignment!.employee_id,
                 note: slot.assignment!.note || '',
                 work_item: slot.assignment!.work_item || '',
+                start_time: slot.assignment!.start_time || '',
+                end_time: slot.assignment!.end_time || '',
               }),
             )
             ev.dataTransfer.effectAllowed = 'move'
@@ -760,7 +814,7 @@ export default function Schedule() {
             }
             const srcRaw = ev.dataTransfer.getData('application/x-remove-shift')
             if (srcRaw) {
-              // 拖來的是「別的班別的姓名方塊」→ 置換到這個班別
+              // 拖來的是「別的班別的姓名方塊」→ 先開彈窗編輯時段，再置換到這個班別
               setRemoveDrag(null)
               try {
                 const src = JSON.parse(srcRaw) as {
@@ -769,8 +823,15 @@ export default function Schedule() {
                   employee_id: string
                   note?: string
                   work_item?: string
+                  start_time?: string
+                  end_time?: string
                 }
-                void swapAssignment(src, { day, shift_code: slot.assignment!.shift_code })
+                if (src.day !== day) {
+                  toast('只能在同一日內置換班別', 'error')
+                  return
+                }
+                if (src.shift_code === slot.assignment!.shift_code) return
+                setSwapEdit({ src, toShiftCode: slot.assignment!.shift_code })
               } catch {
                 toast('置換失敗', 'error')
               }
@@ -778,7 +839,7 @@ export default function Schedule() {
             }
             dropToAssign(day, slot.assignment!.shift_code, ev)
           }}
-          title={`${isAdmin && !isLocked ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : isLocked ? '此日已鎖定，無法更動排班。' : ''}${shift?.name || ''}・${name}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}`}
+          title={`${isAdmin && !isLocked ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : isLocked ? '此日已鎖定，無法更動排班。' : ''}${shift?.name || ''}・${name}${timeOf(slot.assignment!) ? `（時段：${timeOf(slot.assignment!)}）` : ''}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}`}
         >
           {(conflict || overConsecutive) && (
             <span className="shift-chip__warn" title={`${name}${conflict ? ` 當日標記「${statusLabel(rec)}」` : ' 連續上班天數已超過上限'}`}>
@@ -786,6 +847,7 @@ export default function Schedule() {
             </span>
           )}
           <span className="shift-chip__name">{name}</span>
+          {timeOf(slot.assignment!) && <span className="shift-chip__time">{timeOf(slot.assignment!)}</span>}
           {workItemsOf(slot.assignment!.work_item).map((w) => (
             <span key={w.id} className="shift-chip__wi" title={w.name}>
               {w.icon || w.name}
@@ -826,13 +888,13 @@ export default function Schedule() {
             <>
               {amSlots.length > 0 && (
                 <div className="cal-cell__half">
-                  <span className="cal-cell__halflabel">上午</span>
+                  <span className="cal-cell__halflabel">早班</span>
                   {amSlots.map(renderSlot)}
                 </div>
               )}
               {pmSlots.length > 0 && (
                 <div className="cal-cell__half">
-                  <span className="cal-cell__halflabel">下午</span>
+                  <span className="cal-cell__halflabel">晚班</span>
                   {pmSlots.map(renderSlot)}
                 </div>
               )}
@@ -929,11 +991,147 @@ export default function Schedule() {
     )
   }
 
+  // 匯出本月班表為 Excel（格式參考 sample.xlsx：第一列日期、A 欄姓名、
+  // 每天格子填當日時段如「12-20」，最右「總計」欄為早/晚班天數與上班時數）
+  const exportExcel = async () => {
+    const XLSX = await import('xlsx-js-style')
+    const days = daysInMonth(year, month)
+    const shiftByCode = new Map(shiftTypes.map((s) => [s.code, s]))
+    const dayCell = (a: Assignment) => {
+      const shift = shiftByCode.get(a.shift_code)
+      const start = (a.start_time || shift?.start_time || '').replace(':00', '')
+      const end = (a.end_time || shift?.end_time || '').replace(':00', '')
+      return start && end ? `${start}-${end}` : ''
+    }
+    // 日期以「文字」寫入（例如 2026/12/1(四)），避免 Excel 依地區把星期顯示成「週四」
+    const header: string[] = [
+      '',
+      ...Array.from({ length: days }, (_, i) => {
+        const d = new Date(year, month - 1, i + 1)
+        const wd = WEEKDAYS[(d.getDay() + 6) % 7]
+        return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}(${wd})`
+      }),
+      '總計',
+    ]
+    const rows: string[][] = [header]
+    for (const { employee } of stats.rows) {
+      const row: string[] = [employee.name]
+      let amDays = 0
+      let pmDays = 0
+      let hours = 0
+      for (let d = 1; d <= days; d++) {
+        const a = assignments.find((x) => x.employee_id === employee.id && x.day === d)
+        if (!a) {
+          row.push('')
+          continue
+        }
+        row.push(dayCell(a))
+        const shift = shiftByCode.get(a.shift_code)
+        const start = a.start_time || shift?.start_time || ''
+        const end = a.end_time || shift?.end_time || ''
+        const h = Number(start.split(':')[0])
+        if (Number.isFinite(h) && h < 15) amDays++
+        else pmDays++
+        const sm = timeToMin(start)
+        const em = timeToMin(end)
+        if (sm != null && em != null && em > sm) hours += (em - sm) / 60
+      }
+      row.push(`早班：${amDays}天\n晚班：${pmDays}天\n時數：${fmtHours(hours)}小時`)
+      rows.push(row)
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    const totalCol = days + 1
+    const rowCount = rows.length
+
+    // 樣式色票（與網頁同一組色系）
+    const C = {
+      headerFill: '1F6E5E',
+      headerFont: 'FFFFFF',
+      weekendHeaderFill: 'B4472A',
+      nameFill: 'F2EEDF',
+      totalFill: 'E3F0EA',
+      weekendFill: 'FBF1E7',
+      bandFill: 'F9F7F0',
+      border: 'D8D2C2',
+      ink: '2A2418',
+      muted: '8A7D64',
+    } as const
+    const thin = { style: 'thin', color: { rgb: C.border } } as const
+    const border = { top: thin, bottom: thin, left: thin, right: thin }
+
+    // 每個日期欄的星期幾（0=日）：用來幫週六/週日上淡底色
+    const weekdayOf = (d: number) => (firstDayOffset(year, month) + d - 1) % 7
+
+    for (let r = 0; r < rowCount; r++) {
+      for (let c = 0; c <= totalCol; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c })
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' }
+        const isHeader = r === 0
+        const isName = c === 0
+        const isTotal = c === totalCol
+        const isWeekend = !isHeader && !isName && !isTotal && weekdayOf(c) >= 5
+        const banded = !isHeader && !isName && !isTotal && !isWeekend && r % 2 === 0
+        let fill: string | undefined
+        let fontColor: string | undefined
+        if (isHeader) {
+          fill = c >= 1 && c <= days && weekdayOf(c) >= 5 ? C.weekendHeaderFill : C.headerFill
+          fontColor = C.headerFont
+        } else if (isName) {
+          fill = C.nameFill
+        } else if (isTotal) {
+          fill = C.totalFill
+        } else if (isWeekend) {
+          fill = C.weekendFill
+        } else if (banded) {
+          fill = C.bandFill
+        }
+        ws[addr].s = {
+          font: {
+            name: '微軟正黑體',
+            sz: isHeader ? 12 : 11,
+            bold: isHeader || isName || isTotal,
+            color: fontColor ? { rgb: fontColor } : undefined,
+          },
+          alignment: {
+            horizontal: isHeader ? 'center' : isTotal ? 'left' : 'center',
+            vertical: 'center',
+            wrapText: isTotal,
+          },
+          fill: fill ? { fgColor: { rgb: fill } } : undefined,
+          border,
+        }
+        // 空的資料格子文字顏色淡一點
+        if (!isHeader && ws[addr].v === '') {
+          ws[addr].s.font = { name: '微軟正黑體', sz: 11, bold: false, color: { rgb: C.muted } }
+        }
+      }
+    }
+
+    ws['!cols'] = [{ wch: 11 }, ...Array.from({ length: days }, () => ({ wch: 16 })), { wch: 26 }]
+    ws['!rows'] = [{ hpt: 24 }, ...Array.from({ length: rowCount - 1 }, () => ({ hpt: 56 }))]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '排班表')
+    XLSX.writeFile(wb, `排班表_${year}年${month}月.xlsx`, { cellStyles: true })
+  }
+
   // —— 頁面本體：標題列（月份切換 + 自動排班按鈕）——
   return (
     <div className="view">
       <div className="view__head">
-        <MonthNav year={year} month={month} onChange={(y, m) => { data.setYear(y); data.setMonth(m) }} />
+        <div className="view__head-left">
+          <MonthNav year={year} month={month} onChange={(y, m) => { data.setYear(y); data.setMonth(m) }} />
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn btn--small"
+              onClick={exportExcel}
+              title="匯出本月班表為 Excel（格式參考 sample.xlsx）"
+            >
+              📄 匯出Excel
+            </button>
+          )}
+        </div>
         {isAdmin && (
           <div className="view__head-actions">
             <button
@@ -1070,11 +1268,11 @@ export default function Schedule() {
             <div className="stats__grid">
               {stats.rows.map(({ employee, total }) => {
                 const st = monthStat[employee.id]
-                const shiftPart = workShifts
+                const parts = workShifts
                   .map((s) => `${stats.perEmpShift[employee.id]?.[s.code] || 0}${s.name}`)
                   .filter((t) => !t.startsWith('0'))
-                  .join('·')
-                const meta = [shiftPart, st?.off ? `${st.off}排休` : ''].filter(Boolean).join('·')
+                if (st?.off) parts.push(`${st.off}排休`)
+                const meta = `${parts.join('·')}[時數：${fmtHours(stats.perEmpHours[employee.id] || 0)}小時]`
                 return (
                   <StatRow
                     key={employee.id}
@@ -1092,9 +1290,12 @@ export default function Schedule() {
               {workShifts.map((s) => (
                 <span key={s.code} className="stat-shift">
                   <ShiftIcon shift={s} />
-                  {s.name} 共 {stats.perShift[s.code] || 0} 班
+                  {s.name}共{stats.perShift[s.code] || 0}班
                 </span>
               ))}
+              <span className="stat-shift stat-shift--total">
+                總時數共{fmtHours(stats.totalHours)}小時
+              </span>
             </div>
           </section>
         </>
@@ -1122,9 +1323,25 @@ export default function Schedule() {
         />
       )}
 
+      {/* 拖曳換班彈窗：置換班別前先確認/編輯當天時段 */}
+      {swapEdit && (
+        <SwapModal
+          src={swapEdit.src}
+          toShiftCode={swapEdit.toShiftCode}
+          shiftTypes={shiftTypes}
+          employee={empById.get(swapEdit.src.employee_id)}
+          onClose={() => setSwapEdit(null)}
+          onSaved={(start, end) => {
+            const s = swapEdit
+            setSwapEdit(null)
+            void finishSwap(s.src, s.toShiftCode, start, end)
+          }}
+        />
+      )}
+
       {isAdmin && (
         <p className="hint">
-          提示：班別可直接點擊修改人力；格子下方圓點為各員工當日狀態，<b>拖曳圓點到「＋」或任一班別會跳出視窗選擇要加入的班別</b>。<b>拖曳已排班的姓名方塊到其他班別可直接「置換」班別</b>，<b>拖到下方「移除此人員」區塊則直接移除</b>。有「⚠」代表該員工已排班但當日標記排休或沒空、或連續上班天數已超過上限，請檢查。姓名後方的 {workItems.filter((w) => w.icon).map((w) => `${w.icon}${w.name}`).join('／')} 是該員工當日負責的工作項目。<b>日期格子有紅色虛線外框＋「⚠人力/工作未滿足」標籤</b>代表當日尚有班別未達需求人數，或該班的{workItems.map((w) => w.name).join('／')}工作項目還沒有人負責。<b>斜線底（公休）的日子當天不營業</b>，自動排班會跳過，設為公休日時既有排班會被清空。
+          提示：班別可直接點擊修改人力；格子下方圓點為各員工當日狀態，<b>拖曳圓點到「＋」或任一班別會跳出視窗選擇要加入的班別（時段必填，預設帶入班別時段）</b>。<b>拖曳已排班的姓名方塊到其他班別會跳出視窗確認並編輯時段後才「置換」</b>，<b>拖到下方「移除此人員」區塊則直接移除</b>。有「⚠」代表該員工已排班但當日標記排休或沒空、或連續上班天數已超過上限，請檢查。姓名後方的 {workItems.filter((w) => w.icon).map((w) => `${w.icon}${w.name}`).join('／')} 是該員工當日負責的工作項目。<b>日期格子有紅色虛線外框＋「⚠人力/工作未滿足」標籤</b>代表當日尚有班別未達需求人數，或該班的{workItems.map((w) => w.name).join('／')}工作項目還沒有人負責。<b>斜線底（公休）的日子當天不營業</b>，自動排班會跳過，設為公休日時既有排班會被清空。
         </p>
       )}
 
@@ -1198,6 +1415,9 @@ export default function Schedule() {
               <ul>
                 <li>每個班會盡量讓吧台、內場都有人負責；沒人會做的會跳出 ⚠ 提醒。</li>
                 <li>條件都一樣時用抽的，所以每次排出來可能略有不同。</li>
+                <li>
+                  自動排班時，每筆排班會<b>自動帶入該班別的時段</b>（依班別設定，例如早班 12:00–20:00、晚班 16:00–24:00）；排完後仍可在人力指派彈窗中微調。
+                </li>
               </ul>
             </section>
           </div>
@@ -1266,6 +1486,160 @@ export default function Schedule() {
   )
 }
 // =============================================================
+// TimeField —— 自訂時間選擇器（滾輪式）
+// 展開面板後用滾輪上下捲動選「時」（0–24，24:00 表示跨夜末班）與「分」（只 00/30），
+// 捲動停格的那一項就是目前選擇；按「確定」才寫入欄位，按「取消」放棄。
+// 面板採行內式（不浮在上層），會把所在列往下推開，因此不會被彈窗邊緣遮住。
+// =============================================================
+const TIME_ITEM_H = 34
+
+function pad2Num(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+function initHour(v: string): number {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v || '')
+  if (!m) return 12
+  const h = Number(m[1])
+  return h >= 0 && h <= 24 ? h : 12
+}
+
+function initMinute(v: string): number {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v || '')
+  if (!m) return 0
+  return Number(m[2]) === 30 ? 30 : 0
+}
+
+function timeCenter(list: HTMLDivElement | null, count: number): number {
+  if (!list) return 0
+  const idx = Math.round(list.scrollTop / TIME_ITEM_H)
+  return Math.max(0, Math.min(count - 1, idx))
+}
+
+function scrollToTime(list: HTMLDivElement | null, idx: number, smooth = true): void {
+  if (!list) return
+  list.scrollTo({ top: idx * TIME_ITEM_H, behavior: smooth ? 'smooth' : 'auto' })
+}
+
+const TIME_HOURS = Array.from({ length: 25 }, (_, i) => i)
+const TIME_MINUTES = [0, 30]
+
+function TimeField({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string
+  onChange: (v: string) => void
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [hour, setHour] = useState(initHour(value))
+  const [minute, setMinute] = useState(initMinute(value))
+  const hourListRef = useRef<HTMLDivElement>(null)
+  const minListRef = useRef<HTMLDivElement>(null)
+
+  const openPicker = () => {
+    setHour(initHour(value))
+    setMinute(initMinute(value))
+    setOpen(true)
+  }
+
+  // 面板展開後把兩欄直接定位到目前時間的位置（瞬間定位，不要有捲動動畫）
+  useEffect(() => {
+    if (!open) return
+    scrollToTime(hourListRef.current, initHour(value), false)
+    scrollToTime(minListRef.current, initMinute(value) === 30 ? 1 : 0, false)
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onHourScroll = () => {
+    const h = timeCenter(hourListRef.current, TIME_HOURS.length)
+    setHour(h)
+    if (h === 24) setMinute(0)
+  }
+
+  const onMinuteScroll = () => {
+    setMinute(timeCenter(minListRef.current, TIME_MINUTES.length))
+  }
+
+  const apply = () => {
+    const h = hour === 24 ? 24 : hour
+    const m = h === 24 ? 0 : minute
+    onChange(`${pad2Num(h)}:${pad2Num(m)}`)
+    setOpen(false)
+  }
+
+  return (
+    <span className="time-field">
+      <button
+        type="button"
+        className="time-field__btn"
+        disabled={disabled}
+        onClick={() => (open ? setOpen(false) : openPicker())}
+      >
+        {value || '--:--'}
+      </button>
+      {open && (
+        <span className="time-field__panel">
+          <span className="time-field__cols">
+            <span className="time-field__col">
+              <span className="time-field__colbar" />
+              <div
+                ref={hourListRef}
+                className="time-field__list"
+                onScroll={onHourScroll}
+              >
+                {TIME_HOURS.map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    className={`time-field__opt${h === hour ? ' time-field__opt--on' : ''}`}
+                    onClick={() => scrollToTime(hourListRef.current, h)}
+                  >
+                    {pad2Num(h)}
+                  </button>
+                ))}
+              </div>
+            </span>
+            <span className="time-field__colon">:</span>
+            <span className="time-field__col">
+              <span className="time-field__colbar" />
+              <div
+                ref={minListRef}
+                className="time-field__list"
+                onScroll={onMinuteScroll}
+              >
+                {TIME_MINUTES.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={`time-field__opt${minute === m ? ' time-field__opt--on' : ''}`}
+                    onClick={() => scrollToTime(minListRef.current, m === 30 ? 1 : 0)}
+                  >
+                    {pad2Num(m)}
+                  </button>
+                ))}
+              </div>
+            </span>
+          </span>
+          <span className="time-field__preview">
+            {pad2Num(hour === 24 ? 24 : hour)}:{pad2Num(hour === 24 ? 0 : minute)}
+          </span>
+          <span className="time-field__actions">
+            <button type="button" className="btn btn--tiny" onClick={() => setOpen(false)}>
+              取消
+            </button>
+            <button type="button" className="btn btn--tiny btn--primary" onClick={apply}>
+              確定
+            </button>
+          </span>
+        </span>
+      )}
+    </span>
+  )
+}
+
+// =============================================================
 // AssignModal —— 人力指派彈窗
 // 顯示某一天某個班別的人員；可新增人員、移除人員、勾選工作項目、填寫備註。
 // 所有編輯先存在彈窗內的 local 狀態，按下「完成」才比對差異、一次寫入後端，
@@ -1300,7 +1674,25 @@ function AssignModal({
 }) {
   const workTypes = shiftTypes.filter((s) => s.code !== 'OFF')
   const [shiftCode, setShiftCode] = useState(initialShiftCode || workTypes[0]?.code || '') // 目前選中的班別
-  const [local, setLocal] = useState<Assignment[]>(assignedDay)                            // 這天所有已排班（彈窗內即時維護的副本）
+
+  // 某班別的預設時段（自動排班／新加人員時帶入的初始值）
+  const defaultTimeOf = (code: string) => {
+    const s = shiftTypes.find((x) => x.code === code)
+    return { start: s?.start_time || '', end: s?.end_time || '' }
+  }
+
+  // 這天所有已排班（彈窗內即時維護的副本）；
+  // 開啟時把沒有時段的舊資料補上班別預設時段，確保「時段必填」全員成立
+  const [local, setLocal] = useState<Assignment[]>(() =>
+    assignedDay.map((a) => {
+      const t = defaultTimeOf(a.shift_code)
+      return {
+        ...a,
+        start_time: a.start_time || t.start,
+        end_time: a.end_time || t.end,
+      }
+    }),
+  )
   const [newEmployeeId, setNewEmployeeId] = useState(initialEmployeeId || '')              // 「要新增的人員」下拉選到誰
   const [saving, setSaving] = useState(false)                                              // 是否正在把編輯寫入後端
   const initialRef = useRef<Assignment[]>(assignedDay) // 開啟時的原始資料（「完成」時比對有哪些異動）
@@ -1316,12 +1708,14 @@ function AssignModal({
     return m
   }, [employees])
 
-  const people = local.filter((a) => a.shift_code === shiftCode) // 目前班別下的人員
+  const people = local.filter((a) => a.shift_code === shiftCode).sort((a, b) => compareEmployees(empById.get(a.employee_id), empById.get(b.employee_id))) // 目前班別下的人員（依員工排序）
   const usedToday = new Set(local.map((a) => a.employee_id))     // 當天已排過的人（每人每天只能一班）
   // 可新增的人選：在職、當天還沒排、且不在目前班別中
-  const candidates = employees.filter(
-    (e) => e.active !== '0' && !usedToday.has(e.id) && !people.some((p) => p.employee_id === e.id),
-  )
+  const candidates = employees
+    .filter(
+      (e) => e.active !== '0' && !usedToday.has(e.id) && !people.some((p) => p.employee_id === e.id),
+    )
+    .sort(compareEmployees)
   const draggedEmp = initialEmployeeId ? empById.get(initialEmployeeId) : undefined
 
   // 計算某員工「若在某天排班，會連續工作幾天上限」：以該天為中心往前往後數，
@@ -1361,10 +1755,19 @@ function AssignModal({
     if (newEmployeeId && newEmployeeId !== initialEmployeeId) setNewEmployeeId('')
   }
 
-  // 新增人員：只加入彈窗內的 local，「完成」時才送後端
+  // 新增人員：只加入彈窗內的 local，「完成」時才送後端（時段預設帶入班別預設）
   const addPerson = () => {
     if (!newEmployeeId) return
-    const entry: Assignment = { year, month, day, shift_code: shiftCode, employee_id: newEmployeeId }
+    const t = defaultTimeOf(shiftCode)
+    const entry: Assignment = {
+      year,
+      month,
+      day,
+      shift_code: shiftCode,
+      employee_id: newEmployeeId,
+      start_time: t.start,
+      end_time: t.end,
+    }
     setLocal((prev) => (prev.some((a) => a.shift_code === shiftCode && a.employee_id === newEmployeeId) ? prev : [...prev, entry]))
     setNewEmployeeId('')
   }
@@ -1377,6 +1780,25 @@ function AssignModal({
   // 輸入框打字的同時更新備註到 local（即時顯示）
   const updateNoteLocal = (empId: string, note: string) => {
     setLocal((prev) => prev.map((a) => (a.shift_code === shiftCode && a.employee_id === empId ? { ...a, note } : a)))
+  }
+
+  // 更新某人員的時段欄位（開始/結束）
+  const updateTimeLocal = (empId: string, field: 'start_time' | 'end_time', value: string) => {
+    setLocal((prev) =>
+      prev.map((a) => (a.shift_code === shiftCode && a.employee_id === empId ? { ...a, [field]: value } : a)),
+    )
+  }
+
+  // 一段時段是否合法（格式正確且結束在開始之後）
+  const timeOk = (a: Assignment): boolean => {
+    const t = defaultTimeOf(a.shift_code)
+    const s = a.start_time || t.start
+    const e = a.end_time || t.end
+    const ok = (v: string) => /^\d{1,2}:\d{2}$/.test(v)
+    if (!ok(s) || !ok(e)) return false
+    const sm = Number(s.split(':')[0]) * 60 + Number(s.split(':')[1])
+    const em = Number(e.split(':')[0]) * 60 + Number(e.split(':')[1])
+    return em > sm
   }
 
   // 同一人日的唯一鍵（每人每天只會在一班）
@@ -1396,14 +1818,37 @@ function AssignModal({
     setSaving(true)
     void (async () => {
       const initial = initialRef.current
-      const current = localRef.current
+      // 所有排班都補上「有效時段」（有設定的用設定值，否則用班別預設），時段必填
+      const current = localRef.current.map((a) => {
+        const t = defaultTimeOf(a.shift_code)
+        return {
+          ...a,
+          start_time: a.start_time || t.start,
+          end_time: a.end_time || t.end,
+        }
+      })
+      const bad = current.find((a) => !timeOk(a))
+      if (bad) {
+        toast(`「${empById.get(bad.employee_id)?.name || '該員工'}」的排班時段不完整，請檢查後再儲存`, 'error')
+        closingRef.current = false
+        setSaving(false)
+        return
+      }
       const initialMap = new Map(initial.map((a) => [keyOf(a), a]))
       const currentMap = new Map(current.map((a) => [keyOf(a), a]))
       const removed = initial.filter((a) => !currentMap.has(keyOf(a))) // 被刪掉的人員
-      const upserts: Assignment[] = []                                 // 新增或備註/工作項目有變動的人員
+      const upserts: Assignment[] = []                                 // 新增或備註/工作項目/時段有變動的人員
       for (const a of current) {
         const prev = initialMap.get(keyOf(a))
-        if (!prev || prev.note !== a.note || prev.work_item !== a.work_item) upserts.push(a)
+        if (
+          !prev ||
+          prev.note !== a.note ||
+          prev.work_item !== a.work_item ||
+          (prev.start_time || '') !== (a.start_time || '') ||
+          (prev.end_time || '') !== (a.end_time || '')
+        ) {
+          upserts.push(a)
+        }
       }
       try {
         for (const a of removed) {
@@ -1415,7 +1860,18 @@ function AssignModal({
         for (const a of upserts) {
           await api('/schedule/assign', {
             method: 'PUT',
-            body: { year, month, day, shift_code: a.shift_code, employee_id: a.employee_id, action: 'add', note: a.note || '', work_item: a.work_item || '' },
+            body: {
+              year,
+              month,
+              day,
+              shift_code: a.shift_code,
+              employee_id: a.employee_id,
+              action: 'add',
+              note: a.note || '',
+              work_item: a.work_item || '',
+              start_time: a.start_time || '',
+              end_time: a.end_time || '',
+            },
           })
         }
         onClose(current)
@@ -1449,7 +1905,7 @@ function AssignModal({
         <div>
           <span className="field__label">當日人員（可多人）</span>
           {people.length === 0 && <p className="muted">此班別目前無人。</p>}
-          {/* 目前班別下的人員列：姓名 + 備註輸入框 + 移除按鈕 */}
+          {/* 目前班別下的人員列：姓名 + 時段 + 工作項目 + 備註 + 移除按鈕 */}
           {people.map((p) => {
             const emp = empById.get(p.employee_id)
             const empSkills = new Set((emp?.skills || []).map((s) => String(s.id)))
@@ -1463,6 +1919,19 @@ function AssignModal({
                     ⚠ 已連續 {pConsecutive} 天
                   </span>
                 )}
+                <div className="assign-person__time">
+                  <TimeField
+                    value={p.start_time || defaultTimeOf(p.shift_code).start}
+                    onChange={(v) => updateTimeLocal(p.employee_id, 'start_time', v)}
+                    disabled={saving}
+                  />
+                  <span className="assign-person__timedash">–</span>
+                  <TimeField
+                    value={p.end_time || defaultTimeOf(p.shift_code).end}
+                    onChange={(v) => updateTimeLocal(p.employee_id, 'end_time', v)}
+                    disabled={saving}
+                  />
+                </div>
                 <div className="assign-person__wis">
                   {workItems.map((w) => {
                     const on = workItemIdsOf(p.work_item).includes(String(w.id))
@@ -1520,7 +1989,7 @@ function AssignModal({
           </p>
         )}
         <p className="hint">
-          勾選工作項目、填寫備註後按「儲存」一次寫入；按「關閉」放棄編輯、回復原狀。每人每天只排一個班別。
+          每位人員的<b>排班時段為必填</b>（預設帶入班別時段，可再調整）；勾選工作項目、填寫備註後按「儲存」一次寫入；按「關閉」放棄編輯、回復原狀。每人每天只排一個班別。
         </p>
         <div className="modal__actions">
           <button type="button" className="btn" disabled={saving} onClick={handleCancel}>
@@ -1528,6 +1997,83 @@ function AssignModal({
           </button>
           <button type="button" className="btn btn--primary" disabled={saving} onClick={handleDone}>
             {saving ? '儲存中…' : '儲存'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// =============================================================
+// SwapModal —— 拖曳置換班別的時段編輯彈窗
+// 拖曳「已排班的姓名方塊」到其他班別時，因為每筆排班都帶當天實際時段，
+// 需先確認/編輯新班別的時段才能完成置換。時段預設帶入「原本班別的時段」，
+// 送出後才由父層呼叫 /schedule/assign 的 action:'move'。
+// =============================================================
+function SwapModal({
+  src,
+  toShiftCode,
+  shiftTypes,
+  employee,
+  onClose,
+  onSaved,
+}: {
+  src: { day: number; shift_code: string; employee_id: string; start_time?: string; end_time?: string }
+  toShiftCode: string
+  shiftTypes: ShiftType[]
+  employee?: Employee
+  onClose: () => void
+  onSaved: (start: string, end: string) => void
+}) {
+  const fromShift = shiftTypes.find((s) => s.code === src.shift_code)
+  const toShift = shiftTypes.find((s) => s.code === toShiftCode)
+  // 預設帶入「原本班別」的時段（優先取當天實際時段，其次班別預設）
+  const [start, setStart] = useState(src.start_time || fromShift?.start_time || '')
+  const [end, setEnd] = useState(src.end_time || fromShift?.end_time || '')
+  const [error, setError] = useState('')
+
+  const save = () => {
+    const ok = (v: string) => /^\d{1,2}:\d{2}$/.test(v)
+    if (!ok(start) || !ok(end)) {
+      setError('請填寫正確的開始與結束時間')
+      return
+    }
+    const sm = Number(start.split(':')[0]) * 60 + Number(start.split(':')[1])
+    const em = Number(end.split(':')[0]) * 60 + Number(end.split(':')[1])
+    if (em <= sm) {
+      setError('結束時間需在開始時間之後')
+      return
+    }
+    setError('')
+    onSaved(start, end)
+  }
+
+  return (
+    <Modal title={`置換班別・${employee?.name || '該員工'}`} onClose={onClose}>
+      <div className="stack">
+        <p className="assign-target">
+          將把 <b>{employee?.name || '該員工'}</b> 從「{fromShift?.name || src.shift_code}」置換到「
+          {toShift?.name || toShiftCode}」。
+        </p>
+        <div className="form-row">
+          <Field label="開始時間 *">
+            <TimeField value={start} onChange={setStart} />
+          </Field>
+          <Field label="結束時間 *">
+            <TimeField value={end} onChange={setEnd} />
+          </Field>
+        </div>
+        <p className="hint">
+          排班時段為必填；已預設帶入原本班別的時段
+          {start && end ? `（${start}–${end}）` : ''}，可直接使用或再調整。
+        </p>
+        {error && <p className="form-error">{error}</p>}
+        <div className="modal__actions">
+          <button type="button" className="btn" onClick={onClose}>
+            取消
+          </button>
+          <button type="button" className="btn btn--primary" onClick={save}>
+            置換
           </button>
         </div>
       </div>

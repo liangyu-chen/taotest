@@ -384,11 +384,18 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     }
   }
 
+  // 每個班別的預設時段（自動排班的排班時段照此帶入，之後人工再微調）
+  const shiftTimeByCode = {}
+  for (const s of workShifts) {
+    shiftTimeByCode[s.code] = { start: s.start_time || '', end: s.end_time || '' }
+  }
+
   const assignments = []
   for (const [key, shiftCode] of assigned) {
     const [empId, date] = key.split(':')
     const [, m, d] = date.split('-').map(Number)
     const workItemIds = workItemByKey.get(key) || []
+    const t = shiftTimeByCode[shiftCode] || {}
     assignments.push({
       year,
       month: m,
@@ -396,6 +403,8 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
       shift_code: shiftCode,
       employee_id: empId,
       work_item: workItemIds.join(','),
+      start_time: t.start || '',
+      end_time: t.end || '',
     })
   }
   assignments.sort((a, b) => a.day - b.day)

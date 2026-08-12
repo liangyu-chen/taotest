@@ -322,6 +322,13 @@ code,
   margin-bottom: 18px;
 }
 
+.view__head-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .view__head-actions {
   display: flex;
   flex-direction: column;
@@ -673,6 +680,27 @@ textarea.holiday-input:focus {
   border-radius: 14px;
   box-shadow: var(--shadow);
   animation: rise 0.18s ease-out;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.modal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid var(--panel);
+}
+
+.modal::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }
 
 .modal--wide {
@@ -1293,7 +1321,10 @@ html[data-view="desktop"] .cal-cell--locked .cal-emp {
 .shift-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  row-gap: 2px;
+  gap: 4px 6px;
   width: 100%;
   padding: 2.5px 7px;
   border-radius: 6px;
@@ -1315,6 +1346,8 @@ button.shift-chip:not(.shift-chip--add):hover {
 }
 
 .shift-chip__name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1347,6 +1380,20 @@ button.shift-chip:not(.shift-chip--add):hover {
   color: currentColor;
   opacity: 0.9;
   background: rgba(0, 0, 0, 0.1);
+  padding: 0 5px;
+  border-radius: 4px;
+}
+
+.shift-chip__time {
+  flex: none;
+  font-size: calc(9.5px * var(--font-scale));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+  color: currentColor;
+  opacity: 0.95;
+  background: rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 0 5px;
   border-radius: 4px;
 }
@@ -1531,6 +1578,165 @@ button.shift-chip:not(.shift-chip--add):hover {
 .assign-person__name {
   font-weight: 700;
   flex: none;
+}
+
+.assign-person__time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1 1 100%;
+  margin-left: 0;
+}
+
+.assign-person__time .time-field {
+  flex: 1 1 0;
+  min-width: 132px;
+}
+
+.assign-person__timedash {
+  color: var(--muted);
+  font-weight: 700;
+  align-self: center;
+}
+
+/* 自訂時間選擇器（滾輪式）：點按鈕展開時/分兩欄捲動，確定才寫入 */
+.time-field {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  position: relative;
+}
+
+.time-field__btn {
+  font: inherit;
+  font-size: calc(12px * var(--font-scale));
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 4px 10px;
+  min-width: 84px;
+  width: 100%;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.time-field__btn:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.time-field__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.time-field__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.time-field__cols {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 4px;
+}
+
+.time-field__col {
+  position: relative;
+  width: 44px;
+  height: calc(3 * 34px);
+  overflow: hidden;
+}
+
+.time-field__colbar {
+  position: absolute;
+  top: 34px;
+  left: 0;
+  right: 0;
+  height: 34px;
+  border-top: 1px solid var(--accent);
+  border-bottom: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--accent-soft);
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.time-field__list {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  overflow-y: auto;
+  padding: 34px 0;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  box-sizing: border-box;
+}
+
+.time-field__list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.time-field__list::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 2px;
+}
+
+.time-field__opt {
+  display: block;
+  width: 100%;
+  height: 34px;
+  scroll-snap-align: center;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: calc(13px * var(--font-scale));
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 34px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.time-field__opt--on {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.time-field__colon {
+  align-self: center;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.time-field__preview {
+  text-align: center;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.time-field__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 /* 手動加人時若連續工作天數超過上限的警告訊息 */
@@ -1809,9 +2015,7 @@ button.shift-chip:not(.shift-chip--add):hover {
   font-size: calc(11px * var(--font-scale));
   color: var(--muted);
   font-weight: 400;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.5;
 }
 
 .stat-row__bar {
@@ -1843,6 +2047,11 @@ button.shift-chip:not(.shift-chip--add):hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.stat-shift--total {
+  color: var(--accent-strong);
+  font-weight: 700;
 }
 
 /* ---------- Availability ---------- */
@@ -3043,6 +3252,14 @@ button.shift-chip:not(.shift-chip--add):hover {
     flex-basis: 100%;
     min-height: 34px;
   }
+  html:not([data-view="desktop"]) .assign-person__time {
+    flex: 1 1 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+  html:not([data-view="desktop"]) .assign-person__time .time-field {
+    flex: 1 1 0;
+  }
   html:not([data-view="desktop"]) .assign-add {
     flex-direction: column;
     align-items: stretch;
@@ -3471,6 +3688,14 @@ button.shift-chip:not(.shift-chip--add):hover {
   html[data-view="mobile"] .assign-note {
     flex-basis: 100%;
     min-height: 34px;
+  }
+  html[data-view="mobile"] .assign-person__time {
+    flex: 1 1 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+  html[data-view="mobile"] .assign-person__time .time-field {
+    flex: 1 1 0;
   }
   html[data-view="mobile"] .assign-add {
     flex-direction: column;

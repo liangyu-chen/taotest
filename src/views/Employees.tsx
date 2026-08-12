@@ -77,6 +77,7 @@ export default function Employees() {
               <tr>
                 <th>姓名</th>
                 <th>員工編號</th>
+                <th>排序</th>
                 <th>工作技能</th>
                 <th>類型</th>
                 <th>每班時數</th>
@@ -95,6 +96,7 @@ export default function Employees() {
                       {row.name}
                     </td>
                     <td>{row.employee_no || '—'}</td>
+                    <td className="mono">{row.sort || '—'}</td>
                     <td>
                       {row.skills?.length > 0 ? (
                         <span className="skills-cell">
@@ -257,6 +259,7 @@ function EmployeeModal({
 }) {
   const [name, setName] = useState(employee?.name || '')
   const [no, setNo] = useState(employee?.employee_no || '')
+  const [sort, setSort] = useState(employee?.sort || '')
   const [empType, setEmpType] = useState<'fulltime' | 'parttime'>(employee?.employee_type || 'parttime')
   const [shiftHours, setShiftHours] = useState(employee?.shift_hours || '')
   // 工作技能：可複選（一個員工可同時具備 吧台、內場 等多個工作項目）；必填
@@ -293,6 +296,7 @@ function EmployeeModal({
       const body = {
         name: name.trim(),
         employee_no: no.trim(),
+        sort: sort.trim(),
         employee_type: empType,
         shift_hours: shiftHours.trim(),
         color,
@@ -320,6 +324,15 @@ function EmployeeModal({
         </Field>
         <Field label="員工編號">
           <input value={no} onChange={(e) => setNo(e.target.value)} />
+        </Field>
+        <Field label="排序（數字越小越前面，留空預設依員工編號排序）">
+          <input
+            type="number"
+            min={0}
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            placeholder={employee ? `預設 ${employee.id}` : '自動依編號'}
+          />
         </Field>
         <Field label="工作技能 *（必填）">
           {workItems.length === 0 ? (

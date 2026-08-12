@@ -10,7 +10,7 @@ import { DEFAULT_ADMIN } from './config.js'
 import { distributeWorkItems } from './scheduler.js'
 
 // schema 版本：任何「建表/遷移/種子」邏輯有改動時請 +1，冷啟動才會重新執行初始化
-const SCHEMA_VERSION = '2'
+const SCHEMA_VERSION = '3'
 
 function readHeader(rows) {
   if (rows.length === 0) return []
@@ -43,6 +43,7 @@ export function createInitializer(db) {
         get(r, 'shift_hours'),
         get(r, 'weekly_hours'),
         get(r, 'color'),
+        get(r, 'sort'),
         get(r, 'active') === '' ? '1' : get(r, 'active'),
         get(r, 'created_at'),
       ]),
@@ -60,6 +61,19 @@ export function createInitializer(db) {
       const free = EMPLOYEE_COLORS.find((c) => !used.has(c))
       if (free) used.add(free)
       return { ...e, color: free || '' }
+    })
+    await replaceRows('employees', [TABLES.employees, ...out.map((r) => TABLES.employees.map((h) => r[h] ?? ''))])
+  }
+
+  // 既有員工的「排序」欄位預設值：直接以各自的 id 填入資料庫
+  // （此後名單／行事曆／彙總／匯出都依這個 sort 排序）
+  async function seedEmployeeSorts() {
+    const emps = await readTable('employees')
+    const missing = emps.filter((e) => !String(e.sort || '').trim())
+    if (missing.length === 0) return
+    const out = emps.map((e) => {
+      if (String(e.sort || '').trim()) return e
+      return { ...e, sort: e.id }
     })
     await replaceRows('employees', [TABLES.employees, ...out.map((r) => TABLES.employees.map((h) => r[h] ?? ''))])
   }
@@ -226,6 +240,7 @@ export function createInitializer(db) {
 
     await migrateEmployees()
     await seedEmployeeColors()
+    await seedEmployeeSorts()
     await migrateHeadcounts()
     await migrateWorkItems()
 

@@ -26,6 +26,7 @@ export interface Employee {
   shift_hours: string
   weekly_hours: string
   color: string
+  sort: string
   active: string
   skills: { id: string; name: string; icon: string }[]
   created_at: string
@@ -49,6 +50,26 @@ export const EMPLOYEE_COLORS = [
 
 export function isFullTime(emp: Employee): boolean {
   return emp.employee_type === 'fulltime'
+}
+
+// 員工排序鍵：以「排序」欄位為主（數字越小越前面），
+// 未設定／留空時退回以 id 排序（預設行為）。
+export function employeeSortNum(e: { sort?: string; id: string } | undefined): number {
+  if (!e) return Number.MAX_SAFE_INTEGER
+  return Number(e.sort) || Number(e.id) || 0
+}
+
+// 員工比大小（排序值 → 姓名），供名單／行事曆／彙總／匯出共用
+export function compareEmployees(
+  a: { sort?: string; id: string; name: string } | undefined,
+  b: { sort?: string; id: string; name: string } | undefined,
+): number {
+  if (!a) return b ? 1 : 0
+  if (!b) return -1
+  return (
+    employeeSortNum(a) - employeeSortNum(b) ||
+    String(a.name).localeCompare(String(b.name), 'zh-Hant')
+  )
 }
 
 // 日類型：平日／週末／例假日（決定這天的人力需求，也是自動排班的依據之一）
@@ -159,6 +180,8 @@ export interface Availability {
 }
 
 // 已排的班：某人某天被排到某個班別（note 是該班的備註）。
+// start_time/end_time 是該排班當天的實際時段（例如早班預設 12:00–20:00）；
+// 自動排班時依班別預設帶入，人工可再微調。
 // work_item 是該員工當日負責的工作項目 id，多個以逗號分隔（如 "1,2" ＝ 吧台＋內場）
 export interface Assignment {
   year: number
@@ -168,6 +191,8 @@ export interface Assignment {
   employee_id: string
   note?: string
   work_item?: string
+  start_time?: string
+  end_time?: string
 }
 
 // 自動排班結果的統計資料（顯示在「本月人力彙總」）

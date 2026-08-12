@@ -14,6 +14,23 @@ function monthBounds(year, month) {
   return { y, m }
 }
 
+// 檢查「HH:mm」格式，並回傳該時間換算成當日分鐘數（24:00 = 1440）
+function toMin(t) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? '').trim())
+  if (!m) return null
+  const total = Number(m[1]) * 60 + Number(m[2])
+  return total > 1440 ? null : total
+}
+
+// 檢查一段時段是否合法（必填、格式正確、結束在開始之後）
+function validShiftTime(start_time, end_time) {
+  const s = toMin(start_time)
+  const e = toMin(end_time)
+  if (s === null || e === null) return false
+  if (e <= s) return false
+  return true
+}
+
 async function currentEmployeeId(req) {
   if (req.user.employeeId) return String(req.user.employeeId)
   const users = await readTable('users')
@@ -99,6 +116,8 @@ router.get('/schedule', requireAuth, async (req, res, next) => {
       employee_id: String(a.employee_id),
       note: a.note || '',
       work_item: a.work_item || '',
+      start_time: a.start_time || '',
+      end_time: a.end_time || '',
     }))
     res.json({ assignments })
   } catch (e) {
@@ -253,6 +272,8 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
         String(a.employee_id),
         a.note || '',
         a.work_item || '',
+        a.start_time || '',
+        a.end_time || '',
       ])
     const rows = [
       headers,
@@ -280,14 +301,18 @@ router.put('/schedule/assign', requireAuth, requireAdmin, async (req, res, next)
     const lockRows = await readTable('schedule_locks')
     const isLocked = lockRows.some((r) => Number(r.year) === Number(y) && Number(r.month) === Number(m) && Number(r.day) === Number(d))
     if (isLocked) return res.status(409).json({ error: `此日（${Number(m)}/${Number(d)}）已鎖定，無法更動排班` })
-    // 置換班別：同一天的同一人直接改 shift_code（不刪不新增，note/work_item 留在原列）
+    // 置換班別：同一天的同一人直接改 shift_code（不刪不新增，note/work_item 留在原列）。
+    // 置換時需帶上新班別時段（前端會彈窗要求填寫）
     if (action === 'move') {
       if (!to_shift_code || !employee_id) return res.status(400).json({ error: '參數不足' })
+      if (!validShiftTime(start_time, end_time)) {
+        return res.status(400).json({ error: '請填寫正確的排班時段' })
+      }
       if (String(to_shift_code) === sc) return res.json({ ok: true })
       const changed = await updateWhere(
         'schedule',
         { year: y, month: m, day: d, shift_code: sc, employee_id: String(employee_id) },
-        { shift_code: String(to_shift_code) },
+        { shift_code: String(to_shift_code), start_time: String(start_time), end_time: String(end_time) },
       )
       if (!changed) return res.status(404).json({ error: '找不到該筆排班，無法置換' })
       return res.json({ ok: true })
@@ -295,10 +320,15 @@ router.put('/schedule/assign', requireAuth, requireAdmin, async (req, res, next)
     const isAdd = action !== 'remove'
     if (isAdd) {
       if (!employee_id) return res.status(400).json({ error: '請選擇人員' })
-      // UPSERT：存在就更新備註/工作項目、不存在就新增，單一 SQL 搞定
+      if (!validShiftTime(start_time, end_time)) {
+        return res.status(400).json({ error: '請填寫正確的排班時段' })
+      }
+      // UPSERT：存在就更新備註/工作項目/時段、不存在就新增，單一 SQL 搞定
       const upsert = { year: y, month: m, day: d, shift_code: sc, employee_id: String(employee_id) }
       if (note !== undefined) upsert.note = note || ''
       if (work_item !== undefined) upsert.work_item = work_item || ''
+      if (start_time !== undefined) upsert.start_time = String(start_time)
+      if (end_time !== undefined) upsert.end_time = String(end_time)
       await upsertRow('schedule', ['year', 'month', 'day', 'shift_code', 'employee_id'], upsert)
     } else if (employee_id) {
       await deleteWhere('schedule', { year: y, month: m, day: d, shift_code: sc, employee_id: String(employee_id) })
