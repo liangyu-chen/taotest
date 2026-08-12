@@ -2823,8 +2823,13 @@ button.shift-chip:not(.shift-chip--add):hover {
 }
 
 .login-bg__img {
+  /* 只有上下外擴（避免模糊／縮放時露出邊緣），左右貼齊頁面寬度——
+     inset:-48px 連左右也外擴，會讓整頁出現左右滾輪。 */
   position: absolute;
-  inset: -48px; /* 外擴，避免模糊／縮放時露出邊緣 */
+  left: 0;
+  right: 0;
+  top: -48px;
+  bottom: -48px;
   background-size: cover;
   background-position: center;
   animation: clear-in 1.5s ease-out 0.15s both;

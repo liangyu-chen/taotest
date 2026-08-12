@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import logoUrl from '../assets/TaoLogo.png'
@@ -16,10 +16,23 @@ const delay = (s: string) => ({ animationDelay: s }) as CSSProperties
 
 export default function Login() {
   const { login, user } = useAuth()
+  const pageRef = useRef<HTMLDivElement>(null)
   const [username, setUsername] = useState('taosuper')
   const [password, setPassword] = useState('taowucoffee')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // iOS Safari 一進入時網頁內容會被排在動態島下方（unsafe 區域不渲染內容）。
+  // 用頁面本身的 top 偏移量把視窗往下捲，讓背景照片頂到畫面上緣。
+  useEffect(() => {
+    const el = pageRef.current
+    if (!el) return
+    const raf = requestAnimationFrame(() => {
+      const top = el.getBoundingClientRect().top
+      if (top > 0) window.scrollTo(0, top)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   // 若已登入，直接離開登入頁
   if (user) return <Navigate to="/" replace />
@@ -45,7 +58,7 @@ export default function Login() {
   }
 
   return (
-    <div className="login-page">
+    <div className="login-page" ref={pageRef}>
       <div className="login-bg" aria-hidden="true">
         <div className="login-bg__img" style={{ backgroundImage: `url(${bgUrl})` }} />
         <div className="login-bg__veil" />
