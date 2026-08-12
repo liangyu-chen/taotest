@@ -23,6 +23,7 @@ function pickFreeColor(rows, excludeId) {
 router.get('/users', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     const users = await readTable('users')
+    users.sort((a, b) => Number(a.id) - Number(b.id))
     res.json({ users: users.map(toPublicUser) })
   } catch (e) {
     next(e)
