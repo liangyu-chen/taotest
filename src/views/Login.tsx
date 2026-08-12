@@ -16,8 +16,8 @@ const delay = (s: string) => ({ animationDelay: s }) as CSSProperties
 
 export default function Login() {
   const { login, user } = useAuth()
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('admin123')
+  const [username, setUsername] = useState('taosuper')
+  const [password, setPassword] = useState('taowucoffee')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
