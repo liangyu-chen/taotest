@@ -291,7 +291,7 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
 
 router.put('/schedule/assign', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const { year, month, day, shift_code, to_shift_code, employee_id, action, note, work_item } = req.body || {}
+    const { year, month, day, shift_code, to_shift_code, employee_id, action, note, work_item, start_time, end_time } = req.body || {}
     if (!year || !month || !day || !shift_code) return res.status(400).json({ error: '參數不足' })
     const y = String(year)
     const m = String(month)
