@@ -147,15 +147,24 @@ function useMonthData() {
   const [loading, setLoading] = useState(true)
   const assignmentsRef = useRef<Assignment[]>([])
 
-  // 抓取這個月需要的所有資料（多支 API 同時抓）。silent=true 時不顯示整頁載入。
+  // 抓取這個月需要的所有資料（多支 API 同時抓）。silent=true 時不顯示整頁載入；
+  // light=true 時只重抓本月班表（其他資料本次操作不會變動），供「微調後背景對齊」用
   const load = useCallback(
-    async (opts?: { silent?: boolean }) => {
+    async (opts?: { silent?: boolean; light?: boolean }) => {
       const silent = !!opts?.silent
+      const light = !!opts?.light
       if (!silent) setLoading(true)
       try {
         // 上個月（或跨年）的排班：供「跨月連續上班天數」往前回溯用
         const prevYear = month === 1 ? year - 1 : year
         const prevMonth = month === 1 ? 12 : month - 1
+        if (light) {
+          const a = await api<{ assignments: Assignment[] }>(`/schedule?year=${year}&month=${month}`)
+          if (!(silent && a.assignments.length === 0 && assignmentsRef.current.length > 0)) {
+            setAssignments(a.assignments)
+          }
+          return
+        }
         const [a, e, s, av, hc, st, wi, lk, cd, prev] = await Promise.all([
           api<{ assignments: Assignment[] }>(`/schedule?year=${year}&month=${month}`),
           api<{ employees: Employee[] }>('/employees'),
@@ -532,15 +541,15 @@ export default function Schedule() {
           (a) => !(a.day === target.day && a.shift_code === target.shift_code && a.employee_id === target.employee_id),
         ),
       )
-      await data.reload({ silent: true })
+      void data.reload({ silent: true, light: true })
     } catch (err) {
       toast((err as Error).message, 'error')
     }
   }
 
   // 置換：把某員工從原班別「移動」到目標班別（限同一天）。
-  // 做法：先從原班別移除，再加到目標班別（備註一併帶過去）；
-  // 若第二步失敗會自動還原，避免人員消失。
+  // 後端 action:'move' 直接把該列 shift_code 改成目標班（原子更新，note/work_item 留在原列）；
+  // 成功後本機立即更新畫面，背景只重抓班表對齊後端。
   const swapAssignment = async (
     src: { day: number; shift_code: string; employee_id: string; note?: string; work_item?: string },
     dst: { day: number; shift_code: string },
@@ -561,41 +570,29 @@ export default function Schedule() {
     try {
       await api('/schedule/assign', {
         method: 'PUT',
-        body: { year, month, day: src.day, shift_code: src.shift_code, employee_id: src.employee_id, action: 'remove' },
-      })
-    } catch (err) {
-      toast((err as Error).message, 'error')
-      return
-    }
-    try {
-      await api('/schedule/assign', {
-        method: 'PUT',
         body: {
           year,
           month,
           day: src.day,
-          shift_code: dst.shift_code,
+          shift_code: src.shift_code,
+          to_shift_code: dst.shift_code,
           employee_id: src.employee_id,
-          action: 'add',
-          note: src.note || '',
-          work_item: src.work_item || '',
+          action: 'move',
         },
       })
     } catch (err) {
-      // 加入失敗：把剛才移除的排班還原回去
-      try {
-        await api('/schedule/assign', {
-          method: 'PUT',
-          body: { year, month, day: src.day, shift_code: src.shift_code, employee_id: src.employee_id, action: 'add', note: src.note || '', work_item: src.work_item || '' },
-        })
-      } catch {
-        /* 還原失敗則忽略 */
-      }
       toast((err as Error).message, 'error')
       return
     }
+    data.setAssignments((prev) =>
+      prev.map((a) =>
+        a.day === src.day && a.shift_code === src.shift_code && a.employee_id === src.employee_id
+          ? { ...a, shift_code: dst.shift_code }
+          : a,
+      ),
+    )
     toast(`已將「${emp?.name || '該員工'}」置換到 ${shiftById.get(dst.shift_code)?.name || dst.shift_code}`)
-    await data.reload({ silent: true })
+    void data.reload({ silent: true, light: true })
   }
 
   // 畫「月曆的每一格」＝一天。上半部是已排的班，下半部是每位員工的狀態圓點

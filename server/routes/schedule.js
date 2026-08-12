@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { readTable, selectWhere, replaceRows, appendRows, deleteWhere, upsertRow, TABLES } from '../storage.js'
+import { readTable, selectWhere, replaceRows, appendRows, deleteWhere, updateWhere, upsertRow, TABLES } from '../storage.js'
 import { requireAuth, requireAdmin } from '../auth.js'
 import { generateSchedule } from '../scheduler.js'
 
@@ -270,7 +270,7 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
 
 router.put('/schedule/assign', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const { year, month, day, shift_code, employee_id, action, note, work_item } = req.body || {}
+    const { year, month, day, shift_code, to_shift_code, employee_id, action, note, work_item } = req.body || {}
     if (!year || !month || !day || !shift_code) return res.status(400).json({ error: '參數不足' })
     const y = String(year)
     const m = String(month)
@@ -280,6 +280,18 @@ router.put('/schedule/assign', requireAuth, requireAdmin, async (req, res, next)
     const lockRows = await readTable('schedule_locks')
     const isLocked = lockRows.some((r) => Number(r.year) === Number(y) && Number(r.month) === Number(m) && Number(r.day) === Number(d))
     if (isLocked) return res.status(409).json({ error: `此日（${Number(m)}/${Number(d)}）已鎖定，無法更動排班` })
+    // 置換班別：同一天的同一人直接改 shift_code（不刪不新增，note/work_item 留在原列）
+    if (action === 'move') {
+      if (!to_shift_code || !employee_id) return res.status(400).json({ error: '參數不足' })
+      if (String(to_shift_code) === sc) return res.json({ ok: true })
+      const changed = await updateWhere(
+        'schedule',
+        { year: y, month: m, day: d, shift_code: sc, employee_id: String(employee_id) },
+        { shift_code: String(to_shift_code) },
+      )
+      if (!changed) return res.status(404).json({ error: '找不到該筆排班，無法置換' })
+      return res.json({ ok: true })
+    }
     const isAdd = action !== 'remove'
     if (isAdd) {
       if (!employee_id) return res.status(400).json({ error: '請選擇人員' })
