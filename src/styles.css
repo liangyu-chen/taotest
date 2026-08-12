@@ -36,7 +36,10 @@ body,
 
 /* 背景花色同步掛到 html：手機版整頁捲動時，html 是根元素，
    背景會畫滿整份文件（含超出視口的捲動區與 overscroll），
-   避免首頁內容較長時捲到下方露出白底。 */
+   避免首頁內容較長時捲到下方露出白底。
+   另外 overflow-x 要掛在 html 而不是 body：body 設 overflow-x:hidden
+   在 iOS Safari 會讓 body 變成捲動容器，根元素的背景就不會
+   塗滿 overscroll 的上下空白區。 */
 html {
   background:
     radial-gradient(rgba(120, 100, 60, 0.06) 1px, transparent 1px),
@@ -44,6 +47,8 @@ html {
     radial-gradient(800px 500px at 90% 85%, rgba(180, 83, 9, 0.12), transparent 55%),
     var(--bg);
   background-size: 22px 22px, 100% 100%, 100% 100%, 100% 100%;
+  background-color: var(--bg);
+  overflow-x: hidden;
 }
 
 body {
@@ -57,7 +62,6 @@ body {
     var(--bg);
   background-size: 22px 22px, 100% 100%, 100% 100%, 100% 100%;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
 }
 
 button,
