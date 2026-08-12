@@ -3026,7 +3026,7 @@ button.shift-chip:not(.shift-chip--add):hover {
     min-height: 100dvh;
   }
   html:not([data-view="desktop"]) .login-page {
-    height: calc(100vh + 50px);
+    height: calc(100vh + 70px);
     padding: 14px;
   }
   html:not([data-view="desktop"]) .sidebar {
@@ -3464,7 +3464,7 @@ button.shift-chip:not(.shift-chip--add):hover {
     min-height: 100dvh;
   }
   html[data-view="mobile"] .login-page {
-    height: calc(100vh + 50px);
+    height: calc(100vh + 70px);
     padding: 14px;
   }
   html[data-view="mobile"] .sidebar {
