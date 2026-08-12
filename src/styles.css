@@ -2781,14 +2781,14 @@ button.shift-chip:not(.shift-chip--add):hover {
    最終停在輕柔微焦的狀態，半透明毛玻璃卡片隨之浮現。 */
 
 .login-page {
-  position: relative;
+  /* position:fixed + inset:0 直接蓋滿整個版型視口（=整塊螢幕，含動態島下方
+     與網址列後方）。固定定位元素依「版型視口」定位，不會像 height:100vh/
+     100dvh 那樣受「網址列展開時的可見區域」限制——之前上下米色就是因為
+     高度只填到可見區域；fixed 才能像登入後的頁面那樣延伸到底。 */
+  position: fixed;
+  inset: 0;
   overflow: hidden;
-  /* 用 100vh（完整版型視口，含動態島下方與網址列後方的整塊螢幕），
-     不用 100dvh：dvh 只等於「網址列展開時的可見區域」，
-     iPhone 上頁面會被夾在動態島下方與網址列上方之間、上下露出米色；
-     100vh 才會像登入後的頁面那樣延伸到整個螢幕。 */
-  height: 100vh;
-  width: 100%;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2800,7 +2800,10 @@ button.shift-chip:not(.shift-chip--add):hover {
     radial-gradient(800px 500px at 90% 85%, rgba(180, 83, 9, 0.12), transparent 55%),
     var(--bg);
   background-size: 22px 22px, 100% 100%, 100% 100%, 100% 100%;
+  /* 內容不躲進動態島／網址列安全區，但底圖照樣蓋滿整塊螢幕 */
   padding: 20px;
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .login-bg {
@@ -3035,6 +3038,8 @@ button.shift-chip:not(.shift-chip--add):hover {
   }
   html:not([data-view="desktop"]) .login-page {
     padding: 14px;
+    padding-top: calc(14px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
   html:not([data-view="desktop"]) .sidebar {
     padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
@@ -3472,6 +3477,8 @@ button.shift-chip:not(.shift-chip--add):hover {
   }
   html[data-view="mobile"] .login-page {
     padding: 14px;
+    padding-top: calc(14px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
   html[data-view="mobile"] .sidebar {
     padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
