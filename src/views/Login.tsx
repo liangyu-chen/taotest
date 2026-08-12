@@ -1,9 +1,9 @@
-import { useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import logoUrl from '../assets/TaoLogo.png'
 import bgUrl from '../assets/background.webp'
-import louisPng from '../assets/Louis.png'
+import louisBear from '../assets/Louis.webp'
 
 // =============================================================
 // Login.tsx —— 登入頁
@@ -22,6 +22,12 @@ export default function Login() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [scare, setScare] = useState(false)
+
+  // 預載彩蛋熊熊，避免跳嚇時才開始下載圖片造成延遲
+  useEffect(() => {
+    const img = new Image()
+    img.src = louisBear
+  }, [])
 
   // 若已登入，直接離開登入頁
   if (user) return <Navigate to="/" replace />
@@ -110,7 +116,7 @@ export default function Login() {
         <div className="jump-scare" onClick={() => setScare(false)}>
           <div className="jump-scare__flash" />
           <div className="jump-scare__bear">
-            <img className="jump-scare__bear-img" src={louisPng} alt="熊熊" />
+            <img className="jump-scare__bear-img" src={louisBear} alt="熊熊" />
           </div>
           <p className="jump-scare__msg">你想盜我帳號嗎!!!</p>
           <p className="jump-scare__sub">路易斯貼在螢幕上瞪你</p>
