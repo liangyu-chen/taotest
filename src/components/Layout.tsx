@@ -99,7 +99,10 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="sidebar__brand">
           <img className="sidebar__logo" src={logoUrl} alt="排班管理" />
           <div>
-            <div className="sidebar__name">排班管理</div>
+            <div className="sidebar__name">
+              排班管理
+              <span className="sidebar__ver">v{__APP_VERSION__}</span>
+            </div>
             <div className="sidebar__sub">ShiftPlanner</div>
           </div>
         </div>
