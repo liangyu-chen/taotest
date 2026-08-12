@@ -2799,12 +2799,11 @@ button.shift-chip:not(.shift-chip--add):hover {
 }
 
 .login-bg__img {
-  /* 上下外擴避免縮放時露出邊緣；左右貼齊以免橫向滾輪 */
+  /* 四邊外擴 48px：clear-in 最終 blur(5px) 會在元素邊緣形成光暈，
+     若不外擴，左右邊緣正好切在螢幕上會看到柔光感。
+     外擴不會造成滾輪——.login-page 的 overflow:hidden 會裁掉。 */
   position: absolute;
-  left: 0;
-  right: 0;
-  top: -48px;
-  bottom: -48px;
+  inset: -48px;
   background-size: cover;
   background-position: center;
   animation: clear-in 1.5s ease-out 0.15s both;
