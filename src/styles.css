@@ -1,5 +1,7 @@
 :root {
   --font-scale: 1;
+  /* iOS 動態島上方安全區高度，供 JS 讀取（env() 只在 CSS 可解析） */
+  --sat: env(safe-area-inset-top, 0px);
   --bg: #f2ecdf;
   --panel: #fffcf4;
   --panel-2: #f6f0e2;

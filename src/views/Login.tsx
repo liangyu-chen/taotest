@@ -22,13 +22,16 @@ export default function Login() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  // iOS Safari 一進入時網頁內容會被排在動態島下方（unsafe 區域不渲染內容）。
-  // 用頁面本身的 top 偏移量把視窗往下捲，讓背景照片頂到畫面上緣。
+  // iOS Safari 一進入時網頁內容會被切在動態島下方（unsafe 區域不渲染內容）。
+  // 版面其實從 y=0 開始排（getBoundingClientRect().top 會是 0），所以不能
+  // 只靠 top>0 判斷；以 CSS 傳出的 --sat（env(safe-area-inset-top)）為準，
+  // 一進入就把視窗往下捲一個動態島高度，讓背景照片頂到畫面上緣。
   useEffect(() => {
     const el = pageRef.current
     if (!el) return
     const raf = requestAnimationFrame(() => {
-      const top = el.getBoundingClientRect().top
+      const sat = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0
+      const top = Math.max(el.getBoundingClientRect().top, sat)
       if (top > 0) window.scrollTo(0, top)
     })
     return () => cancelAnimationFrame(raf)
