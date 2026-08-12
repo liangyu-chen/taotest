@@ -114,7 +114,6 @@ export default function Login() {
           </div>
           <p className="jump-scare__msg">你想盜我帳號嗎!!!</p>
           <p className="jump-scare__sub">路易斯貼在螢幕上瞪你</p>
-          <span className="jump-scare__dismiss">點擊畫面關閉</span>
         </div>
       )}
     </>
