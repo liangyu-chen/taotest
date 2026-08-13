@@ -39,10 +39,10 @@ function morningShiftCode(shiftTypes) {
 }
 
 // 檢核排班的「開始時間」是否與班別設定一致：
-// 一般班別：開始時間不可早於該班別設定的開始時間（例如晚班設定 16:00，卻帶 12:00 開始，
-// 會造成班表顯示在錯誤半格、後續置換失敗）；
-// 早班（開始時間最早的班別）：允許比設定更早（例如早於 12:00 也算合理），
-// 但不可晚於「下一個班別」的開始時間（例如晚班 16:00 開始，早班卻 17:00 開始，已屬晚班時段）。
+// 1. 每個班別都不可晚於「下一個班別」的開始時間（例如午班 14:00、晚班 16:00，
+//    午班卻 17:00 開始已屬晚班時段）；最後一班沒有上限。
+// 2. 非早班：開始時間不可早於該班別設定的開始時間（例如晚班設定 16:00，卻帶 12:00 開始）；
+//    早班（開始時間最早的班別）允許比設定更早（例如早於 12:00 也算合理）。
 // 回傳 null = 沒問題；回傳字串 = 應阻擋的錯誤訊息
 function shiftStartError(shiftTypes, shiftCode, startTime) {
   const shift = shiftTypes.find((s) => s.code === shiftCode)
@@ -51,21 +51,18 @@ function shiftStartError(shiftTypes, shiftCode, startTime) {
   const cfg = toMin(shift.start_time)
   if (sMin === null || cfg === null) return null
 
-  if (morningShiftCode(shiftTypes) === shiftCode) {
-    // 早班：找出「開始時間比這班晚」的班別中最接近的一班
-    const next = shiftTypes
-      .map((s) => ({ code: s.code, min: toMin(s.start_time) }))
-      .filter((s) => s.min !== null && s.min > cfg)
-      .reduce((a, b) => (b.min < a.min ? b : a), { code: null, min: Infinity })
-    if (next.min !== Infinity && sMin >= next.min) {
-      const nextShift = shiftTypes.find((s) => s.code === next.code)
-      return `「${shift.name}」的開始時間不可晚於 ${nextShift?.start_time || ''}（此時段已屬下一班），請調整時間`
-    }
-    return null
+  // 1. 所有班別：開始時間不可晚於「開始時間比這班晚」的班別中最接近的一班
+  const next = shiftTypes
+    .map((s) => ({ code: s.code, min: toMin(s.start_time) }))
+    .filter((s) => s.min !== null && s.min > cfg)
+    .reduce((a, b) => (b.min < a.min ? b : a), { code: null, min: Infinity })
+  if (next.min !== Infinity && sMin >= next.min) {
+    const nextShift = shiftTypes.find((s) => s.code === next.code)
+    return `「${shift.name}」的開始時間不可晚於 ${nextShift?.start_time || ''}（此時段已屬下一班），請調整時間`
   }
 
-  // 一般班別：開始時間不可早於設定的開始時間
-  if (sMin < cfg) {
+  // 2. 非早班：開始時間不可早於設定的開始時間（早班允許提早）
+  if (morningShiftCode(shiftTypes) !== shiftCode && sMin < cfg) {
     return `「${shift.name}」的開始時間不可早於設定的 ${shift.start_time}，請調整時間`
   }
   return null
