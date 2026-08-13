@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import type { Employee, User } from '../types'
-import { Modal, Field, Spinner, toast } from '../components/ui'
+import { Modal, Field, Spinner, toast, useConfirm } from '../components/ui'
 
 // =============================================================
 // Users.tsx —— 帳號管理（管理員）
@@ -16,6 +16,7 @@ export default function Users() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<User | null>(null)
   const [creating, setCreating] = useState(false)
+  const { confirm, dialog } = useConfirm()
 
   // 抓帳號 + 員工兩份資料（顯示「綁定員工」欄位用）
   const load = useCallback(async () => {
@@ -39,7 +40,12 @@ export default function Users() {
   }, [load])
 
   async function remove(row: User) {
-    if (!window.confirm(`確定刪除帳號「${row.username}」？`)) return
+    const ok = await confirm({
+      title: '刪除帳號',
+      message: `確定要刪除帳號「${row.username}」嗎？`,
+      hint: '刪除後該帳號將無法登入。',
+    })
+    if (!ok) return
     try {
       await api(`/users/${row.id}`, { method: 'DELETE' })
       toast('已刪除')
@@ -119,6 +125,8 @@ export default function Users() {
           }}
         />
       )}
+
+      {dialog}
     </div>
   )
 }

@@ -789,6 +789,58 @@ html.modal-open .content {
   margin-top: 6px;
 }
 
+/* 確認刪除彈窗（useConfirm） */
+.confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 6px 4px 2px;
+}
+
+.confirm__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.confirm__message {
+  margin: 0;
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 600;
+  color: var(--text);
+}
+
+.confirm__hint {
+  margin: 0;
+  font-size: calc(12.5px * var(--font-scale));
+  color: var(--muted);
+}
+
+.confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+html[data-view="mobile"] .confirm__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+html[data-view="mobile"] .confirm__actions .btn {
+  height: 40px;
+}
+
 .modal-lead {
   font-size: calc(13px * var(--font-scale));
   color: var(--muted);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { DAY_TYPES, settingsToMap, type Headcount, type Setting, type ShiftType } from '../types'
-import { Modal, Field, Spinner, toast } from '../components/ui'
+import { Modal, Field, Spinner, toast, useConfirm } from '../components/ui'
 
 // =============================================================
 // ShiftTypes.tsx —— 班別與人力需求（管理員）
@@ -18,6 +18,7 @@ export default function ShiftTypes() {
   const [editing, setEditing] = useState<ShiftType | null>(null)
   const [creating, setCreating] = useState(false)
   const [savingHc, setSavingHc] = useState(false)
+  const { confirm, dialog } = useConfirm()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -74,7 +75,12 @@ export default function ShiftTypes() {
   }
 
   async function remove(row: ShiftType) {
-    if (!window.confirm(`確定刪除班別「${row.name}」？`)) return
+    const ok = await confirm({
+      title: '刪除班別',
+      message: `確定要刪除班別「${row.name}」嗎？`,
+      hint: '此操作無法復原。',
+    })
+    if (!ok) return
     try {
       await api(`/shift-types/${row.id}`, { method: 'DELETE' })
       toast('已刪除')
@@ -192,6 +198,8 @@ export default function ShiftTypes() {
           }}
         />
       )}
+
+      {dialog}
     </div>
   )
 }

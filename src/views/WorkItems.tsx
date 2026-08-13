@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import type { WorkItem } from '../types'
 import { WORK_ITEM_ICONS } from '../types'
-import { Modal, Field, Spinner, toast } from '../components/ui'
+import { Modal, Field, Spinner, toast, useConfirm } from '../components/ui'
 
 // =============================================================
 // WorkItems.tsx —— 工作項目（管理員）
@@ -15,6 +15,7 @@ export default function WorkItems() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<WorkItem | null>(null)
   const [creating, setCreating] = useState(false)
+  const { confirm, dialog } = useConfirm()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -33,7 +34,12 @@ export default function WorkItems() {
   }, [load])
 
   async function remove(row: WorkItem) {
-    if (!window.confirm(`確定刪除工作項目「${row.name}」？`)) return
+    const ok = await confirm({
+      title: '刪除工作項目',
+      message: `確定要刪除工作項目「${row.name}」嗎？`,
+      hint: '此操作無法復原。',
+    })
+    if (!ok) return
     try {
       await api(`/work-items/${row.id}`, { method: 'DELETE' })
       toast('已刪除')
@@ -108,6 +114,8 @@ export default function WorkItems() {
           }}
         />
       )}
+
+      {dialog}
     </div>
   )
 }

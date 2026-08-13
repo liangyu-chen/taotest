@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import type { Employee, User, WorkItem } from '../types'
 import { EMPLOYEE_COLORS } from '../types'
-import { Modal, Field, Spinner, toast } from '../components/ui'
+import { Modal, Field, Spinner, toast, useConfirm } from '../components/ui'
 
 // =============================================================
 // Employees.tsx —— 員工管理（管理員）
@@ -19,6 +19,7 @@ export default function Employees() {
   const [editing, setEditing] = useState<Employee | null>(null) // 正在編輯的員工（null = 沒開）
   const [creating, setCreating] = useState(false)               // 是否開「新增員工」
   const [accountFor, setAccountFor] = useState<Employee | null>(null) // 正在建帳號的員工
+  const { confirm, dialog } = useConfirm()
 
   // 抓員工 + 帳號 + 工作項目三份資料（工作項目供「工作技能」選取用）
   const load = useCallback(async () => {
@@ -44,7 +45,12 @@ export default function Employees() {
   }, [load])
 
   async function remove(row: Employee) {
-    if (!window.confirm(`確定刪除員工「${row.name}」？此操作無法復原。`)) return
+    const ok = await confirm({
+      title: '刪除員工',
+      message: `確定要刪除員工「${row.name}」嗎？`,
+      hint: '此操作無法復原。',
+    })
+    if (!ok) return
     try {
       await api(`/employees/${row.id}`, { method: 'DELETE' })
       toast('已刪除')
@@ -179,6 +185,8 @@ export default function Employees() {
           }}
         />
       )}
+
+      {dialog}
     </div>
   )
 }

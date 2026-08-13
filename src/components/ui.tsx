@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
@@ -83,6 +83,56 @@ export function Field({ label, children }: { label: string; children: ReactNode 
       {children}
     </label>
   )
+}
+
+// —— 確認彈窗（useConfirm）——
+// 取代原生 window.confirm：呼叫 const { confirm, dialog } = useConfirm()，
+// 再 const ok = await confirm({...})，true 表示使用者按下確認；最後把 {dialog} 掛進 JSX。
+type ConfirmOptions = {
+  title: string
+  message: ReactNode
+  hint?: string
+  confirmLabel?: string
+}
+
+export function useConfirm() {
+  const [state, setState] = useState<ConfirmOptions | null>(null)
+  const resolver = useRef<((ok: boolean) => void) | null>(null)
+
+  const confirm = useCallback((opts: ConfirmOptions) => {
+    setState(opts)
+    return new Promise<boolean>((resolve) => {
+      resolver.current = resolve
+    })
+  }, [])
+
+  const settle = useCallback((ok: boolean) => {
+    resolver.current?.(ok)
+    resolver.current = null
+    setState(null)
+  }, [])
+
+  const dialog = state ? (
+    <Modal title={state.title} onClose={() => settle(false)}>
+      <div className="confirm">
+        <div className="confirm__icon" aria-hidden="true">
+          ⚠️
+        </div>
+        <p className="confirm__message">{state.message}</p>
+        {state.hint && <p className="confirm__hint">{state.hint}</p>}
+        <div className="confirm__actions">
+          <button type="button" className="btn btn--ghost" onClick={() => settle(false)}>
+            取消
+          </button>
+          <button type="button" className="btn btn--danger" onClick={() => settle(true)}>
+            {state.confirmLabel || '刪除'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  ) : null
+
+  return { confirm, dialog }
 }
 
 // —— 訊息提示（toast）——
