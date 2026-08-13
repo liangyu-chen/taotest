@@ -39,11 +39,10 @@ function morningShiftCode(shiftTypes) {
 }
 
 // 檢核排班的「開始時間」是否與班別設定一致：
-// 開始時間不可早於該班別設定的開始時間（例如晚班設定 16:00，卻帶 12:00 開始，
-// 會造成班表顯示在錯誤半格、後續置換失敗），
-// 但「早班」（開始時間最早的班別）允許比設定更早（例如早於 12:00 也算合理）；
-// 早班同時也不可晚於「下一個班別」的開始時間（例如晚班 16:00 開始，早班卻 17:00 開始，
-// 已重疊晚班時段，應屬晚班）。
+// 一般班別：開始時間不可早於該班別設定的開始時間（例如晚班設定 16:00，卻帶 12:00 開始，
+// 會造成班表顯示在錯誤半格、後續置換失敗）；
+// 早班（開始時間最早的班別）：允許比設定更早（例如早於 12:00 也算合理），
+// 但不可晚於「下一個班別」的開始時間（例如晚班 16:00 開始，早班卻 17:00 開始，已屬晚班時段）。
 // 回傳 null = 沒問題；回傳字串 = 應阻擋的錯誤訊息
 function shiftStartError(shiftTypes, shiftCode, startTime) {
   const shift = shiftTypes.find((s) => s.code === shiftCode)
@@ -51,7 +50,7 @@ function shiftStartError(shiftTypes, shiftCode, startTime) {
   const sMin = toMin(startTime)
   const cfg = toMin(shift.start_time)
   if (sMin === null || cfg === null) return null
-  if (sMin >= cfg) return null
+
   if (morningShiftCode(shiftTypes) === shiftCode) {
     // 早班：找出「開始時間比這班晚」的班別中最接近的一班
     const next = shiftTypes
@@ -64,7 +63,12 @@ function shiftStartError(shiftTypes, shiftCode, startTime) {
     }
     return null
   }
-  return `「${shift.name}」的開始時間不可早於設定的 ${shift.start_time}，請調整時間`
+
+  // 一般班別：開始時間不可早於設定的開始時間
+  if (sMin < cfg) {
+    return `「${shift.name}」的開始時間不可早於設定的 ${shift.start_time}，請調整時間`
+  }
+  return null
 }
 
 async function currentEmployeeId(req) {

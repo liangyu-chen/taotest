@@ -63,16 +63,16 @@ function morningShiftCodeOf(shiftTypes: ShiftType[]): string | null {
 }
 
 // 檢核「開始時間」是否與班別設定一致（與後端 shiftStartError 同步）：
-// 開始時間不可早於該班別設定的開始時間（例如晚班設定 16:00，帶 12:00 開始會顯示錯亂），
-// 但「早班」（開始時間最早的班別）允許比設定更早，且不可晚於「下一班別」的開始時間
-// （例如晚班 16:00 開始，早班 17:00 開始已屬晚班時段）。回傳 '' = 沒問題。
+// 一般班別：開始時間不可早於該班別設定的開始時間；
+// 早班（開始時間最早的班別）：允許比設定更早，但不可晚於「下一班別」的開始時間
+// （例如晚班 16:00 開始，早班 16:00 以後開始已屬晚班時段）。回傳 '' = 沒問題。
 function shiftStartErrorOf(shiftTypes: ShiftType[], shiftCode: string, startTime: string): string {
   const shift = shiftTypes.find((s) => s.code === shiftCode)
   if (!shift || !shift.start_time) return ''
   const sm = toMinOf(startTime)
   const cfg = toMinOf(shift.start_time)
   if (sm === null || cfg === null) return ''
-  if (sm >= cfg) return ''
+
   if (morningShiftCodeOf(shiftTypes) === shiftCode) {
     // 早班：找出「開始時間比這班晚」的班別中最接近的一班
     let nextCode: string | null = null
@@ -90,7 +90,12 @@ function shiftStartErrorOf(shiftTypes: ShiftType[], shiftCode: string, startTime
     }
     return ''
   }
-  return `「${shift.name}」的開始時間不可早於設定的 ${shift.start_time}，請調整時間`
+
+  // 一般班別：開始時間不可早於設定的開始時間
+  if (sm < cfg) {
+    return `「${shift.name}」的開始時間不可早於設定的 ${shift.start_time}，請調整時間`
+  }
+  return ''
 }
 
 // 元素進入畫面時回傳 true（只觸發一次）
