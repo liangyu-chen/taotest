@@ -47,6 +47,35 @@ function chipTextColor(hex: string): string {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.62 ? '#2a2418' : '#ffffff'
 }
 
+// 把「HH:mm」轉成當日分鐘數（格式錯誤回傳 null，24:00 = 1440）
+function toMinOf(v?: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim())
+  if (!m) return null
+  const total = Number(m[1]) * 60 + Number(m[2])
+  return total > 1440 ? null : total
+}
+
+// 早班＝開始時間最早的班別（例如 12:00 的 M 班）
+function morningShiftCodeOf(shiftTypes: ShiftType[]): string | null {
+  const withTime = shiftTypes.filter((s) => toMinOf(s.start_time) !== null)
+  if (withTime.length === 0) return null
+  return withTime.reduce((a, b) => (toMinOf(a.start_time)! < toMinOf(b.start_time)! ? a : b)).code
+}
+
+// 檢核「開始時間」是否與班別設定一致（與後端 shiftStartError 同步）：
+// 開始時間不可早於該班別設定的開始時間（例如晚班設定 16:00，帶 12:00 開始會顯示錯亂），
+// 但「早班」（開始時間最早的班別）允許比設定更早。回傳 '' = 沒問題。
+function shiftStartErrorOf(shiftTypes: ShiftType[], shiftCode: string, startTime: string): string {
+  const shift = shiftTypes.find((s) => s.code === shiftCode)
+  if (!shift || !shift.start_time) return ''
+  const sm = toMinOf(startTime)
+  const cfg = toMinOf(shift.start_time)
+  if (sm === null || cfg === null) return ''
+  if (sm >= cfg) return ''
+  if (morningShiftCodeOf(shiftTypes) === shiftCode) return ''
+  return `「${shift.name}」的開始時間不可早於設定的 ${shift.start_time}，請調整時間`
+}
+
 // 元素進入畫面時回傳 true（只觸發一次）
 function useInView<T extends Element>(threshold = 0.3) {
   const ref = useRef<T | null>(null)
@@ -1861,6 +1890,19 @@ function AssignModal({
         setSaving(false)
         return
       }
+      // 開始時間需符合該班別設定（晚班不可早於設定開始；早班允許更早）
+      const badStart = current.find((a) => {
+        const t = defaultTimeOf(a.shift_code)
+        return shiftStartErrorOf(shiftTypes, a.shift_code, a.start_time || t.start)
+      })
+      if (badStart) {
+        const t = defaultTimeOf(badStart.shift_code)
+        const err = shiftStartErrorOf(shiftTypes, badStart.shift_code, badStart.start_time || t.start)
+        toast(`「${empById.get(badStart.employee_id)?.name || '該員工'}」${err}`, 'error')
+        closingRef.current = false
+        setSaving(false)
+        return
+      }
       const initialMap = new Map(initial.map((a) => [keyOf(a), a]))
       const currentMap = new Map(current.map((a) => [keyOf(a), a]))
       const removed = initial.filter((a) => !currentMap.has(keyOf(a))) // 被刪掉的人員
@@ -2070,6 +2112,11 @@ function SwapModal({
     const em = Number(end.split(':')[0]) * 60 + Number(end.split(':')[1])
     if (em <= sm) {
       setError('結束時間需在開始時間之後')
+      return
+    }
+    const startErr = shiftStartErrorOf(shiftTypes, toShiftCode, start)
+    if (startErr) {
+      setError(startErr)
       return
     }
     setError('')

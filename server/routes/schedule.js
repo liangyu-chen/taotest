@@ -31,6 +31,29 @@ function validShiftTime(start_time, end_time) {
   return true
 }
 
+// 早班＝開始時間最早的班別（例如 12:00 的 M 班）
+function morningShiftCode(shiftTypes) {
+  const withTime = shiftTypes.filter((s) => toMin(s.start_time) !== null)
+  if (withTime.length === 0) return null
+  return withTime.reduce((a, b) => (toMin(a.start_time) < toMin(b.start_time) ? a : b)).code
+}
+
+// 檢核排班的「開始時間」是否與班別設定一致：
+// 開始時間不可早於該班別設定的開始時間（例如晚班設定 16:00，卻帶 12:00 開始，
+// 會造成班表顯示在錯誤半格、後續置換失敗），
+// 但「早班」（開始時間最早的班別）允許比設定更早（例如早於 12:00 也算合理）。
+// 回傳 null = 沒問題；回傳字串 = 應阻擋的錯誤訊息
+function shiftStartError(shiftTypes, shiftCode, startTime) {
+  const shift = shiftTypes.find((s) => s.code === shiftCode)
+  if (!shift || !shift.start_time) return null
+  const sMin = toMin(startTime)
+  const cfg = toMin(shift.start_time)
+  if (sMin === null || cfg === null) return null
+  if (sMin >= cfg) return null
+  if (morningShiftCode(shiftTypes) === shiftCode) return null
+  return `「${shift.name}」的開始時間不可早於設定的 ${shift.start_time}，請調整時間`
+}
+
 async function currentEmployeeId(req) {
   if (req.user.employeeId) return String(req.user.employeeId)
   const users = await readTable('users')
@@ -301,6 +324,8 @@ router.put('/schedule/assign', requireAuth, requireAdmin, async (req, res, next)
     const lockRows = await readTable('schedule_locks')
     const isLocked = lockRows.some((r) => Number(r.year) === Number(y) && Number(r.month) === Number(m) && Number(r.day) === Number(d))
     if (isLocked) return res.status(409).json({ error: `此日（${Number(m)}/${Number(d)}）已鎖定，無法更動排班` })
+    // 檢核開始時間是否與目標班別設定一致（早班允許更早，晚班不得早於設定開始）
+    const shiftTypes = await readTable('shift_types')
     // 置換班別：同一天的同一人直接改 shift_code（不刪不新增，note/work_item 留在原列）。
     // 置換時需帶上新班別時段（前端會彈窗要求填寫）
     if (action === 'move') {
@@ -309,6 +334,8 @@ router.put('/schedule/assign', requireAuth, requireAdmin, async (req, res, next)
         return res.status(400).json({ error: '請填寫正確的排班時段' })
       }
       if (String(to_shift_code) === sc) return res.json({ ok: true })
+      const startErr = shiftStartError(shiftTypes, String(to_shift_code), start_time)
+      if (startErr) return res.status(400).json({ error: startErr })
       const changed = await updateWhere(
         'schedule',
         { year: y, month: m, day: d, shift_code: sc, employee_id: String(employee_id) },
@@ -323,6 +350,8 @@ router.put('/schedule/assign', requireAuth, requireAdmin, async (req, res, next)
       if (!validShiftTime(start_time, end_time)) {
         return res.status(400).json({ error: '請填寫正確的排班時段' })
       }
+      const startErr = shiftStartError(shiftTypes, sc, start_time)
+      if (startErr) return res.status(400).json({ error: startErr })
       // UPSERT：存在就更新備註/工作項目/時段、不存在就新增，單一 SQL 搞定
       const upsert = { year: y, month: m, day: d, shift_code: sc, employee_id: String(employee_id) }
       if (note !== undefined) upsert.note = note || ''
