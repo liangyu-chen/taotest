@@ -393,7 +393,10 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
   const assignments = []
   for (const [key, shiftCode] of assigned) {
     const [empId, date] = key.split(':')
-    const [, m, d] = date.split('-').map(Number)
+    const [y, m, d] = date.split('-').map(Number)
+    // 只輸出「本月」的排班。上個月那批只是為了「跨月連續上班天數」回溯用的，
+    // 不能寫進本月的結果——否則會跟資料庫裡既有的上個月排班重複，撞 ux_schedule_key。
+    if (y !== year || m !== month) continue
     const workItemIds = workItemByKey.get(key) || []
     const t = shiftTimeByCode[shiftCode] || {}
     assignments.push({
