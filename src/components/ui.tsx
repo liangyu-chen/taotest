@@ -91,8 +91,9 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 type ConfirmOptions = {
   title: string
   message: ReactNode
-  hint?: string
+  hint?: ReactNode
   confirmLabel?: string
+  variant?: 'danger' | 'primary'
 }
 
 export function useConfirm() {
@@ -124,7 +125,11 @@ export function useConfirm() {
           <button type="button" className="btn btn--ghost" onClick={() => settle(false)}>
             取消
           </button>
-          <button type="button" className="btn btn--danger" onClick={() => settle(true)}>
+          <button
+            type="button"
+            className={`btn ${state.variant === 'primary' ? 'btn--primary' : 'btn--danger'}`}
+            onClick={() => settle(true)}
+          >
             {state.confirmLabel || '刪除'}
           </button>
         </div>

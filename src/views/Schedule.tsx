@@ -20,7 +20,7 @@ import {
 } from '../types'
 import { useAuth } from '../auth'
 import MonthNav from '../components/MonthNav'
-import { Modal, Spinner, toast } from '../components/ui'
+import { Modal, Spinner, toast, useConfirm } from '../components/ui'
 import { ShiftIcon } from '../components/icons'
 
 // =============================================================
@@ -273,10 +273,9 @@ export default function Schedule() {
   const [isDragging, setIsDragging] = useState(false)                          // 是否正在拖曳（用來停用其他班別的 hover 效果，只突顯被拖曳者）
   const [dotDragId, setDotDragId] = useState<string | null>(null)              // 觸控/舊瀏覽器時，拖曳中的員工 id（dataTransfer 讀不到的 fallback）
   const [generating, setGenerating] = useState(false)                          // 是否正在自動排班
-  const [confirmGenerate, setConfirmGenerate] = useState(false)                // 是否顯示「自動排班」確認彈窗
   const [showRules, setShowRules] = useState(false)                            // 是否顯示「排班規則」說明彈窗
-  const [confirmClosed, setConfirmClosed] = useState<number[] | null>(null)     // 準備設為公休日的日期（需二次確認）
   const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set())     // 被選取的日期（點格子選取，可多選）
+  const { confirm, dialog } = useConfirm()                                     // 確認彈窗（自動排班/設公休日/刪除共用）
   const { lockedDays, setLockedDays } = data
   const { closedDays, setClosedDays } = data
 
@@ -344,6 +343,42 @@ export default function Schedule() {
     } catch (err) {
       toast((err as Error).message, 'error')
     }
+  }
+
+  // 「自動排班」按鈕：先彈確認視窗，確認後才執行
+  const handleGenerateClick = async () => {
+    const ok = await confirm({
+      title: '自動排班確認',
+      message: (
+        <>
+          確定要執行自動排班？將重新產生 <b>{year}</b> 年 <b>{month}</b> 月的班表，並覆蓋既有排班。
+        </>
+      ),
+      hint: '可先用〈批次鎖定〉鎖定不想被更動的日期；已鎖定的天數不會被自動排班變更。公休日當天不營業，自動排班會直接跳過。',
+      confirmLabel: '開始排班',
+      variant: 'primary',
+    })
+    if (ok) void runGenerate()
+  }
+
+  // 「設為公休日」按鈕：先彈確認視窗（提醒會清空該日排班），確認後才執行
+  const handleClosedClick = async (days: number[]) => {
+    if (days.length === 0) return
+    const ok = await confirm({
+      title: '設為公休日確認',
+      message: (
+        <>
+          確定要將 <b>{days.length}</b> 天設為公休日？
+        </>
+      ),
+      hint: (
+        <>
+          ⚠ 設為公休日後，當天<b>不營業</b>：既有已排班的人員<b>會被清空</b>，且自動排班會<b>跳過</b>這些日子。若要讓這些天恢復營業，可再使用〈解除公休日〉。
+        </>
+      ),
+      confirmLabel: '設為公休日',
+    })
+    if (ok) void applyClosed(days, true)
   }
 
   // 執行自動排班：叫後端跑演算法，完成後用回傳的班表刷新畫面
@@ -1201,7 +1236,7 @@ export default function Schedule() {
               type="button"
               className="btn btn--primary"
               disabled={generating}
-              onClick={() => setConfirmGenerate(true)}
+              onClick={() => void handleGenerateClick()}
             >
               {generating ? '⟳ 排班中…' : '⟳ 自動排班'}
             </button>
@@ -1238,7 +1273,7 @@ export default function Schedule() {
           <button
             type="button"
             className="btn btn--small btn--danger"
-            onClick={() => setConfirmClosed([...selectedDays])}
+            onClick={() => void handleClosedClick([...selectedDays])}
             title="設為公休日：當天不營業，自動排班會跳過；既有排班人員會被清空"
           >
             💤 設為公休日
@@ -1487,64 +1522,8 @@ export default function Schedule() {
         </Modal>
       )}
 
-      {/* 自動排班確認彈窗：避免誤觸，確認後才執行 */}
-      {confirmGenerate && (
-        <Modal title="自動排班確認" onClose={() => setConfirmGenerate(false)}>
-          <div className="stack">
-            <p className="modal-lead">
-              確定要執行自動排班？將重新產生 <b>{year}</b> 年 <b>{month}</b> 月的班表，並覆蓋既有排班。
-            </p>
-            <p className="hint">
-              提示：可先用〈批次鎖定〉鎖定不想被更動的日期；已鎖定的天數不會被自動排班變更。公休日當天不營業，自動排班會直接跳過。
-            </p>
-            <div className="modal__actions">
-              <button type="button" className="btn" onClick={() => setConfirmGenerate(false)}>
-                取消
-              </button>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => {
-                  setConfirmGenerate(false)
-                  void runGenerate()
-                }}
-              >
-                ⟳ 開始排班
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 公休日確認彈窗：設為公休日會清空當天已排班人員，需先警告 */}
-      {confirmClosed && (
-        <Modal title="設為公休日確認" onClose={() => setConfirmClosed(null)}>
-          <div className="stack">
-            <p className="modal-lead">
-              確定要將 <b>{confirmClosed.length}</b> 天設為公休日？
-            </p>
-            <p className="hint">
-              ⚠ 設為公休日後，當天<b>不營業</b>：既有已排班的人員<b>會被清空</b>，且自動排班會<b>跳過</b>這些日子。若要讓這些天恢復營業，可再使用〈解除公休日〉。
-            </p>
-            <div className="modal__actions">
-              <button type="button" className="btn" onClick={() => setConfirmClosed(null)}>
-                取消
-              </button>
-              <button
-                type="button"
-                className="btn btn--danger"
-                onClick={() => {
-                  const days = confirmClosed
-                  setConfirmClosed(null)
-                  void applyClosed(days, true)
-                }}
-              >
-                💤 設為公休日
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* 共用確認彈窗：自動排班 / 設公休日 / 其他需二次確認的動作 */}
+      {dialog}
     </div>
   )
 }
