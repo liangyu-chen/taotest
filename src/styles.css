@@ -814,7 +814,7 @@ html.modal-open .content {
 /* emoji 本身會偏下，靠 line-height + 位移置中 */
 .confirm__icon-emoji {
   line-height: 1;
-  transform: translateY(-2px);
+  transform: translateY(-4px);
 }
 
 .confirm__message {
