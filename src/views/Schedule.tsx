@@ -2025,7 +2025,7 @@ function AssignModal({
                       <label
                         key={w.id}
                         className={`assign-wi ${on ? 'assign-wi--on' : ''} ${allowed ? '' : 'assign-wi--disabled'}`}
-                        title={allowed ? `勾選：${w.name}` : `此員工無「${w.name}」技能，無法勾選`}
+                        title={allowed ? `切換：${w.name}` : `此員工無「${w.name}」技能，無法勾選`}
                       >
                         <input
                           type="checkbox"
@@ -2033,7 +2033,8 @@ function AssignModal({
                           disabled={saving || !allowed}
                           onChange={() => toggleWorkItem(p.employee_id, String(w.id))}
                         />
-                        <span>
+                        <span className="assign-wi__toggle" aria-hidden="true" />
+                        <span className="assign-wi__label">
                           {w.icon} {w.name}
                         </span>
                       </label>
