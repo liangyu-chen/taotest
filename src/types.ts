@@ -33,27 +33,28 @@ export interface Employee {
 }
 
 // 員工代表色調色盤（20 色），員工管理頁讓使用者挑，系統自動補色時也從這裡輪流取
+// 前 8 色為現有員工使用中的顏色（不動），其餘為對比差異較大的新增色
 export const EMPLOYEE_COLORS = [
   '#f59e0b',
   '#22d3ee',
   '#a78bfa',
   '#34d399',
-  '#fb923c',
-  '#60a5fa',
-  '#f472b6',
-  '#a3e635',
-  '#e879f9',
-  '#2dd4bf',
   '#f87171',
   '#facc15',
-  '#f43f5e',
-  '#38bdf8',
-  '#4ade80',
-  '#c084fc',
-  '#94a3b8',
-  '#f97316',
-  '#14b8a6',
-  '#fda4af',
+  '#e879f9',
+  '#f472b6',
+  '#ea580c',
+  '#16a34a',
+  '#65a30d',
+  '#2563eb',
+  '#4f46e5',
+  '#0d9488',
+  '#0e7490',
+  '#6d28d9',
+  '#a21caf',
+  '#b91c1c',
+  '#9a3412',
+  '#854d0e',
 ]
 
 export function isFullTime(emp: Employee): boolean {
