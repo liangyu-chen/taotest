@@ -20,7 +20,7 @@ import {
 } from '../types'
 import { useAuth } from '../auth'
 import MonthNav from '../components/MonthNav'
-import { Modal, Field, Spinner, toast } from '../components/ui'
+import { Modal, Spinner, toast } from '../components/ui'
 import { ShiftIcon } from '../components/icons'
 
 // =============================================================
@@ -242,6 +242,7 @@ export default function Schedule() {
     toShiftCode: string
   } | null>(null) // 拖曳換班時等待編輯時段的彈窗資料
   const [isDragging, setIsDragging] = useState(false)                          // 是否正在拖曳（用來停用其他班別的 hover 效果，只突顯被拖曳者）
+  const [dotDragId, setDotDragId] = useState<string | null>(null)              // 觸控/舊瀏覽器時，拖曳中的員工 id（dataTransfer 讀不到的 fallback）
   const [generating, setGenerating] = useState(false)                          // 是否正在自動排班
   const [confirmGenerate, setConfirmGenerate] = useState(false)                // 是否顯示「自動排班」確認彈窗
   const [showRules, setShowRules] = useState(false)                            // 是否顯示「排班規則」說明彈窗
@@ -544,7 +545,9 @@ export default function Schedule() {
 
   // 把「拖曳中的員工」放進某天某班別：檢查當日是否已排班，然後打開指派彈窗（shiftCode 已預選）
   const dropToAssign = (day: number, shiftCode: string | null, e: React.DragEvent) => {
-    const empId = e.dataTransfer.getData('application/x-emp-id')
+    // iOS Safari 在 drop 時讀不到 dataTransfer 的自訂型別，改用 state 追蹤的來源員工 id
+    const empId = e.dataTransfer.getData('application/x-emp-id') || dotDragId
+    if (empId) setDotDragId(null)
     if (!empId || !isAdmin) return
     if (lockedDays.includes(day)) {
       toast('此日已鎖定，無法新增排班', 'error')
@@ -793,12 +796,15 @@ export default function Schedule() {
             setIsDragging(false)
           }}
           onDragOver={(ev) => {
-            // 接受「員工圓點」拖進來（新增人員），也接受「其他班別的姓名方塊」拖進來（置換）
+            // 接受「員工圓點」拖進來（新增人員），也接受「其他班別的姓名方塊」拖進來（置換）。
+            // iOS Safari 的 dataTransfer.types 讀不到自訂型別，改用 state 判斷拖曳來源
+            const types = ev.dataTransfer.types
+            const hasEmp = types.includes('application/x-emp-id') || !!dotDragId
+            const hasShift = types.includes('application/x-remove-shift') || !!removeDrag
             if (
               isAdmin &&
               !isLocked &&
-              (ev.dataTransfer.types.includes('application/x-emp-id') ||
-                ev.dataTransfer.types.includes('application/x-remove-shift'))
+              (hasEmp || hasShift)
             ) {
               ev.preventDefault()
               ev.dataTransfer.dropEffect = 'move'
@@ -813,28 +819,38 @@ export default function Schedule() {
               return
             }
             const srcRaw = ev.dataTransfer.getData('application/x-remove-shift')
+            let src: {
+              day: number
+              shift_code: string
+              employee_id: string
+              note?: string
+              work_item?: string
+              start_time?: string
+              end_time?: string
+            } | null = null
             if (srcRaw) {
+              try {
+                src = JSON.parse(srcRaw) as typeof src
+              } catch {
+                src = null
+              }
+            } else if (removeDrag) {
+              // iOS Safari：drop 時 dataTransfer 讀不到自訂型別，改用 state 追蹤的來源
+              src = {
+                day: removeDrag.day,
+                shift_code: removeDrag.shift_code,
+                employee_id: removeDrag.employee_id,
+              }
+            }
+            if (src) {
               // 拖來的是「別的班別的姓名方塊」→ 先開彈窗編輯時段，再置換到這個班別
               setRemoveDrag(null)
-              try {
-                const src = JSON.parse(srcRaw) as {
-                  day: number
-                  shift_code: string
-                  employee_id: string
-                  note?: string
-                  work_item?: string
-                  start_time?: string
-                  end_time?: string
-                }
-                if (src.day !== day) {
-                  toast('只能在同一日內置換班別', 'error')
-                  return
-                }
-                if (src.shift_code === slot.assignment!.shift_code) return
-                setSwapEdit({ src, toShiftCode: slot.assignment!.shift_code })
-              } catch {
-                toast('置換失敗', 'error')
+              if (src.day !== day) {
+                toast('只能在同一日內置換班別', 'error')
+                return
               }
+              if (src.shift_code === slot.assignment!.shift_code) return
+              setSwapEdit({ src, toShiftCode: slot.assignment!.shift_code })
               return
             }
             dropToAssign(day, slot.assignment!.shift_code, ev)
@@ -911,7 +927,7 @@ export default function Schedule() {
                 setEditing({ day, shiftCode: null })
               }}
               onDragOver={(ev) => {
-                if (isAdmin && !isLocked && ev.dataTransfer.types.includes('application/x-emp-id')) {
+                if (isAdmin && !isLocked && (ev.dataTransfer.types.includes('application/x-emp-id') || !!dotDragId)) {
                   ev.preventDefault()
                   ev.dataTransfer.dropEffect = 'move'
                   setDropTarget(`${day}:+`)
@@ -950,10 +966,12 @@ export default function Schedule() {
                     if (isLocked) return
                     ev.dataTransfer.setData('application/x-emp-id', emp.id)
                     ev.dataTransfer.effectAllowed = 'move'
+                    setDotDragId(emp.id)
                     setDropTarget(null)
                     setIsDragging(true)
                   }}
                   onDragEnd={() => {
+                    setDotDragId(null)
                     setDropTarget(null)
                     setIsDragging(false)
                   }}
@@ -1545,11 +1563,20 @@ function TimeField({
     setOpen(true)
   }
 
-  // 面板展開後把兩欄直接定位到目前時間的位置（瞬間定位，不要有捲動動畫）
+  // 面板展開後把兩欄直接定位到目前時間的位置（瞬間定位，不要有捲動動畫）。
+  // iOS Safari 的 scroll-snap 在程式捲動後會跑「吸附動畫」，期間的點擊會被吃掉
+  // （造成面板上的「取消/確定」按不下去）——先把 snap 關掉再定位、之後再恢復。
   useEffect(() => {
     if (!open) return
-    scrollToTime(hourListRef.current, initHour(value), false)
-    scrollToTime(minListRef.current, initMinute(value) === 30 ? 1 : 0, false)
+    const jump = (list: HTMLDivElement | null, idx: number) => {
+      if (!list) return
+      const prev = list.style.scrollSnapType
+      list.style.scrollSnapType = 'none'
+      list.scrollTop = idx * TIME_ITEM_H
+      list.style.scrollSnapType = prev
+    }
+    jump(hourListRef.current, initHour(value))
+    jump(minListRef.current, initMinute(value) === 30 ? 1 : 0)
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onHourScroll = () => {
@@ -2056,12 +2083,14 @@ function SwapModal({
           {toShift?.name || toShiftCode}」。
         </p>
         <div className="form-row">
-          <Field label="開始時間 *">
+          <div className="field">
+            <span className="field__label">開始時間 *</span>
             <TimeField value={start} onChange={setStart} />
-          </Field>
-          <Field label="結束時間 *">
+          </div>
+          <div className="field">
+            <span className="field__label">結束時間 *</span>
             <TimeField value={end} onChange={setEnd} />
-          </Field>
+          </div>
         </div>
         <p className="hint">
           排班時段為必填；已預設帶入原本班別的時段

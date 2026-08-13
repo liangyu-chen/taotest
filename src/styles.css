@@ -1659,6 +1659,13 @@ button.shift-chip:not(.shift-chip--add):hover {
   cursor: not-allowed;
 }
 
+/* 觸控裝置：避免雙擊縮放/300ms 延遲吃掉時間面板上的點擊 */
+.time-field__btn,
+.time-field__opt,
+.time-field__actions .btn {
+  touch-action: manipulation;
+}
+
 .time-field__panel {
   display: flex;
   flex-direction: column;
