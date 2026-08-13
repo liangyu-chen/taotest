@@ -12,8 +12,20 @@ router.post('/login', async (req, res, next) => {
     const users = await readTable('users')
     const user = users.find((u) => u.username.toLowerCase() === String(username).trim().toLowerCase())
     if (!user) return res.status(401).json({ error: '帳號或密碼錯誤' })
-    const ok = await bcrypt.compare(String(password), user.password_hash)
-    if (!ok) return res.status(401).json({ error: '帳號或密碼錯誤' })
+    const stored = String(user.password_hash || '')
+    // 管理者可能直接在資料庫把密碼改成明碼（方便忘了密碼的人重置），
+    // 所以驗證除了 bcrypt 雜湊外，也接受與資料庫內容完全相同的明碼。
+    const looksHashed = /^\$2[aby]\$/.test(stored)
+    const ok = looksHashed && (await bcrypt.compare(String(password), stored))
+    const plainOk = !ok && stored === String(password)
+    if (!ok && !plainOk) return res.status(401).json({ error: '帳號或密碼錯誤' })
+    if (plainOk) {
+      // 明碼驗證成功：編碼後存回資料庫，之後就改走 bcrypt 驗證
+      user.password_hash = await bcrypt.hash(String(password), 10)
+      const headers = ['id', 'username', 'password_hash', 'display_name', 'role', 'employee_id', 'created_at']
+      const rows = [headers, ...users.map((u) => headers.map((h) => u[h] ?? ''))]
+      await replaceRows('users', rows)
+    }
     const publicUser = toPublicUser(user)
     const token = signToken(publicUser)
     res.json({ token, user: publicUser })
