@@ -1060,6 +1060,13 @@ export default function Schedule() {
       }),
       '總計',
     ]
+    // 早班（開始時間 < 15 點）的排班 key，匯出時時間字用藍色標示（晚班用紅色）
+    const amKey = new Set<string>()
+    for (const a of assignments) {
+      const start = a.start_time || shiftByCode.get(a.shift_code)?.start_time || ''
+      const h = Number(start.split(':')[0])
+      if (Number.isFinite(h) && h < 15) amKey.add(`${a.employee_id}:${a.day}`)
+    }
     const rows: string[][] = [header]
     for (const { employee } of stats.rows) {
       const row: string[] = [employee.name]
@@ -1103,6 +1110,8 @@ export default function Schedule() {
       border: 'D8D2C2',
       ink: '2A2418',
       muted: '8A7D64',
+      amTime: '1D4ED8', // 早班時間：藍
+      pmTime: 'DC2626', // 晚班時間：紅
     } as const
     const thin = { style: 'thin', color: { rgb: C.border } } as const
     const border = { top: thin, bottom: thin, left: thin, right: thin }
@@ -1132,6 +1141,13 @@ export default function Schedule() {
           fill = C.weekendFill
         } else if (banded) {
           fill = C.bandFill
+        }
+        // 有排班時段的日期格：早班時間用藍色、晚班時間用紅色
+        if (!isHeader && c >= 1 && c <= days && ws[addr].v !== '') {
+          const rowEmp = stats.rows[r - 1]?.employee
+          if (rowEmp) {
+            fontColor = amKey.has(`${rowEmp.id}:${c}`) ? C.amTime : C.pmTime
+          }
         }
         ws[addr].s = {
           font: {
