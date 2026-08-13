@@ -2054,9 +2054,10 @@ function SwapModal({
 }) {
   const fromShift = shiftTypes.find((s) => s.code === src.shift_code)
   const toShift = shiftTypes.find((s) => s.code === toShiftCode)
-  // 預設帶入「原本班別」的時段（優先取當天實際時段，其次班別預設）
-  const [start, setStart] = useState(src.start_time || fromShift?.start_time || '')
-  const [end, setEnd] = useState(src.end_time || fromShift?.end_time || '')
+  // 預設帶入「目標班別」的時段：早班→晚班若仍帶早班時間，
+  // 時段與班別不符會顯示在錯誤的半格，後續再拖曳就會失敗
+  const [start, setStart] = useState(toShift?.start_time || src.start_time || fromShift?.start_time || '')
+  const [end, setEnd] = useState(toShift?.end_time || src.end_time || fromShift?.end_time || '')
   const [error, setError] = useState('')
 
   const save = () => {
@@ -2093,7 +2094,7 @@ function SwapModal({
           </div>
         </div>
         <p className="hint">
-          排班時段為必填；已預設帶入原本班別的時段
+          排班時段為必填；已預設帶入目標班別的時段
           {start && end ? `（${start}–${end}）` : ''}，可直接使用或再調整。
         </p>
         {error && <p className="form-error">{error}</p>}
