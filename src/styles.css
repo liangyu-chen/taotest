@@ -811,6 +811,12 @@ html.modal-open .content {
   border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
 }
 
+/* emoji 本身會偏下，靠 line-height + 位移置中 */
+.confirm__icon-emoji {
+  line-height: 1;
+  transform: translateY(-2px);
+}
+
 .confirm__message {
   margin: 0;
   font-size: calc(15px * var(--font-scale));

@@ -117,7 +117,7 @@ export function useConfirm() {
     <Modal title={state.title} onClose={() => settle(false)}>
       <div className="confirm">
         <div className="confirm__icon" aria-hidden="true">
-          ⚠️
+          <span className="confirm__icon-emoji">⚠️</span>
         </div>
         <p className="confirm__message">{state.message}</p>
         {state.hint && <p className="confirm__hint">{state.hint}</p>}
