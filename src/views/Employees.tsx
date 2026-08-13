@@ -352,6 +352,7 @@ function EmployeeModal({
                         )
                       }
                     />
+                    <span className="skill-chip__toggle" aria-hidden="true" />
                     <span>
                       {w.icon && <span className="wi-icon">{w.icon}</span>}
                       {w.name}

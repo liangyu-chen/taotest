@@ -2647,8 +2647,48 @@ button.shift-chip:not(.shift-chip--add):hover {
 }
 
 .skill-chip input {
-  width: auto;
+  position: absolute;
+  width: 1px;
+  height: 1px;
   margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.skill-chip__toggle {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: #d4d4d8;
+  transition: background 0.2s ease;
+}
+
+.skill-chip__toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.skill-chip input:checked + .skill-chip__toggle {
+  background: #16a34a;
+}
+
+.skill-chip input:checked + .skill-chip__toggle::after {
+  transform: translateX(14px);
+}
+
+.skill-chip input:focus-visible + .skill-chip__toggle {
+  outline: 2px solid #16a34a;
+  outline-offset: 1px;
 }
 
 .skill-chip--on {
