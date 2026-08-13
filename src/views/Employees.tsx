@@ -152,6 +152,11 @@ export default function Employees() {
           employee={editing}
           workItems={workItems}
           takenColors={rows.filter((r) => r.id !== editing?.id).map((r) => r.color).filter(Boolean)}
+          takenNames={Object.fromEntries(
+            rows
+              .filter((r) => r.id !== editing?.id && r.color)
+              .map((r) => [r.color, r.name]),
+          )}
           onClose={() => {
             setCreating(false)
             setEditing(null)
@@ -248,12 +253,14 @@ function EmployeeModal({
   employee,
   workItems,
   takenColors,
+  takenNames,
   onClose,
   onSaved,
 }: {
   employee: Employee | null
   workItems: WorkItem[]
   takenColors: string[]
+  takenNames: Record<string, string>
   onClose: () => void
   onSaved: () => void
 }) {
@@ -383,7 +390,7 @@ function EmployeeModal({
           </Field>
         </div>
         <Field label="代表顏色 *（每位員工需不同，班表會以顏色區分員工）">
-          {/* 顏色調色盤：已被別人用的顏色會停用（disabled） */}
+          {/* 顏色調色盤：已被別人使用的顏色會停用並打紅叉 */}
           <div className="color-picker">
             {EMPLOYEE_COLORS.map((c) => {
               const taken = takenColors.includes(c) && c !== color
@@ -394,12 +401,13 @@ function EmployeeModal({
                   className={`color-swatch${color === c ? ' color-swatch--active' : ''}`}
                   style={{ background: c }}
                   disabled={taken}
-                  title={taken ? '已被其他員工使用' : c}
+                  title={taken ? `已被「${takenNames[c] || '其他員工'}」使用` : c}
                   onClick={() => setColor(c)}
                 />
               )
             })}
           </div>
+          <p className="form-hint">打紅叉的顏色代表已被其他員工使用。</p>
         </Field>
         <label className="check-row">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />

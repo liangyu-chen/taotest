@@ -32,7 +32,7 @@ export interface Employee {
   created_at: string
 }
 
-// 員工代表色調色盤（12 色），員工管理頁讓使用者挑，系統自動補色時也從這裡輪流取
+// 員工代表色調色盤（20 色），員工管理頁讓使用者挑，系統自動補色時也從這裡輪流取
 export const EMPLOYEE_COLORS = [
   '#f59e0b',
   '#22d3ee',
@@ -46,6 +46,14 @@ export const EMPLOYEE_COLORS = [
   '#2dd4bf',
   '#f87171',
   '#facc15',
+  '#f43f5e',
+  '#38bdf8',
+  '#4ade80',
+  '#c084fc',
+  '#94a3b8',
+  '#f97316',
+  '#14b8a6',
+  '#fda4af',
 ]
 
 export function isFullTime(emp: Employee): boolean {
