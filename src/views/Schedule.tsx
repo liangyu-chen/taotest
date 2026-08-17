@@ -1432,6 +1432,7 @@ export default function Schedule() {
           assignedDay={assignments.filter((a) => a.day === editing.day)}
           maxConsecutiveWorkDays={maxConsecutiveWorkDays}
           consecutiveDaysOf={consecutiveDaysOf}
+          availByKey={availByKey}
           onClose={(finalLocal) => {
             setEditing(null)
             data.setAssignments((prev) => [...prev.filter((a) => a.day !== editing.day), ...finalLocal])
@@ -1727,6 +1728,7 @@ function AssignModal({
   assignedDay,
   maxConsecutiveWorkDays,
   consecutiveDaysOf,
+  availByKey,
   onClose,
 }: {
   year: number
@@ -1740,6 +1742,7 @@ function AssignModal({
   assignedDay: Assignment[]
   maxConsecutiveWorkDays: number
   consecutiveDaysOf: (empId: string, targetDay: number) => number
+  availByKey: Map<string, Availability>
   onClose: (finalLocal: Assignment[]) => void
 }) {
   const workTypes = shiftTypes.filter((s) => s.code !== 'OFF')
@@ -1795,6 +1798,10 @@ function AssignModal({
   const addTargetEmp = addTargetId ? empById.get(addTargetId) : undefined
   const addConsecutive = addTargetId ? consecutiveDaysOf(addTargetId, day) : 0
   const addOverConsecutive = maxConsecutiveWorkDays > 0 && addConsecutive > maxConsecutiveWorkDays
+
+  // 檢查「要新增的人員」當天是否排休
+  const addAvailRec = addTargetId ? availByKey.get(`${addTargetId}:${dateKey(year, month, day)}`) : undefined
+  const addIsOff = addAvailRec?.status === 'off'
 
   // 把「1,2」逗號分隔的工作項目 id 字串轉成陣列（供勾選框比對）
   const workItemIdsOf = (raw?: string): string[] =>
@@ -2070,6 +2077,11 @@ function AssignModal({
           <p className="assign-warn">
             ⚠ <b>{addTargetEmp.name}</b> 排入 {day} 日後將<b>連續上班 {addConsecutive} 天</b>，已超過上限
             {maxConsecutiveWorkDays} 天。請確認是否要繼續，或另選他人。
+          </p>
+        )}
+        {addTargetEmp && addIsOff && (
+          <p className="assign-warn">
+            ⚠ <b>{addTargetEmp.name}</b> 已於 {month} 月 {day} 日<b>排休</b>，仍要將其排入此班嗎？請確認是否要繼續，或另選他人。
           </p>
         )}
         <p className="hint">
