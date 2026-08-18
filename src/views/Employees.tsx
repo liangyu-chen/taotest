@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
-import type { Employee, User, WorkItem } from '../types'
+import type { Employee, EmployeePriority, User, WorkItem } from '../types'
 import { EMPLOYEE_COLORS } from '../types'
 import { Modal, Field, Spinner, toast, useConfirm } from '../components/ui'
 
@@ -284,6 +284,7 @@ function EmployeeModal({
     employee?.color || EMPLOYEE_COLORS.find((c) => !takenColors.includes(c)) || '',
   )
   const [active, setActive] = useState(employee ? employee.active !== '0' : true)
+  const [priority, setPriority] = useState<EmployeePriority>(employee?.priority || 'equal')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -316,6 +317,7 @@ function EmployeeModal({
         shift_hours: shiftHours.trim(),
         color,
         active,
+        priority,
         skills,
       }
       if (employee) {
@@ -397,6 +399,14 @@ function EmployeeModal({
             />
           </Field>
         </div>
+        <Field label="排班優先權">
+          <select value={priority} onChange={(e) => setPriority(e.target.value as EmployeePriority)}>
+            <option value="priority">優先排班</option>
+            <option value="equal">平等（隨機）</option>
+            <option value="secondary">次要排班</option>
+          </select>
+          <p className="form-hint">自動排班時，條件相同的情況下，優先排班者會先被排入，次要排班者最後。</p>
+        </Field>
         <Field label="代表顏色 *（每位員工需不同，班表會以顏色區分員工）">
           {/* 顏色調色盤：已被別人使用的顏色會停用並打紅叉 */}
           <div className="color-picker">

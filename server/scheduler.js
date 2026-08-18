@@ -148,6 +148,12 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     if (targetHours[emp.id] <= 0) targetHours[emp.id] = hoursPerShift[emp.id] * days
   }
 
+  // 員工排班優先權對照表（priority=優先、equal=平等、secondary=次要）
+  const priorityMap = {}
+  for (const emp of activeEmployees) {
+    priorityMap[emp.id] = emp.priority || 'equal'
+  }
+
   const assigned = new Map()
   const hoursDone = {}
   const codeCount = {}
@@ -254,8 +260,17 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     // 平日早班用較小幅度（50）——「偏好 −500」「雙技能 −300」的優先權差距遠大於此，
     // 所以偏好早班仍會優先、雙技能者仍會優先，只是同分時改為隨機。
     // 其餘班別維持較大幅度（250），讓排班每次看起來略有不同。
-    if (isWeekdayMorningShift(dayNum, shiftCode)) s += Math.random() * 50
-    else s += Math.random() * 250
+    // 排班優先權：優先者隨機範圍較小（分數偏低＝先被選），次要者隨機範圍較大（分數偏高＝後被選）。
+    const pri = priorityMap[empId] || 'equal'
+    if (isWeekdayMorningShift(dayNum, shiftCode)) {
+      if (pri === 'priority') s += Math.random() * 10
+      else if (pri === 'secondary') s += 50 + Math.random() * 10
+      else s += Math.random() * 50
+    } else {
+      if (pri === 'priority') s += Math.random() * 50
+      else if (pri === 'secondary') s += 250 + Math.random() * 50
+      else s += Math.random() * 250
+    }
     s += index * 0.001
     return s
   }

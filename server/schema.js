@@ -6,7 +6,7 @@
 
 export const TABLES = {
   users: ['id', 'username', 'password_hash', 'display_name', 'role', 'employee_id', 'created_at'],
-  employees: ['id', 'name', 'employee_no', 'employee_type', 'shift_hours', 'weekly_hours', 'color', 'sort', 'active', 'created_at'],
+  employees: ['id', 'name', 'employee_no', 'employee_type', 'shift_hours', 'weekly_hours', 'color', 'sort', 'priority', 'active', 'created_at'],
   employee_skills: ['employee_id', 'work_item_id'],
   shift_types: ['id', 'name', 'code', 'start_time', 'end_time', 'color', 'sort', 'created_at'],
   headcounts: ['shift_code', 'day_type', 'count'],

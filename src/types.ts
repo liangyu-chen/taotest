@@ -16,6 +16,8 @@ export interface User {
 
 export type EmployeeType = 'fulltime' | 'parttime'
 
+export type EmployeePriority = 'priority' | 'equal' | 'secondary'
+
 // 員工：color 是該員工在班表上的代表色（後端啟動時會自動補色）；
 // skills 是該員工的工作技能（一對多，可同時會 吧台、內場 等多個工作項目）
 export interface Employee {
@@ -27,6 +29,7 @@ export interface Employee {
   weekly_hours: string
   color: string
   sort: string
+  priority: EmployeePriority
   active: string
   skills: { id: string; name: string; icon: string }[]
   created_at: string

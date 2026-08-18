@@ -154,7 +154,7 @@ function normalizeSkillIds(skills) {
 
 router.post('/employees', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const { name, employee_no, employee_type, shift_hours, weekly_hours, color, sort, skills } = req.body || {}
+    const { name, employee_no, employee_type, shift_hours, weekly_hours, color, sort, priority, skills } = req.body || {}
     if (!name) return res.status(400).json({ error: '員工姓名為必填' })
     const rows = await readTable('employees')
     const colorVal = String(color ?? '').trim()
@@ -171,6 +171,7 @@ router.post('/employees', requireAuth, requireAdmin, async (req, res, next) => {
       String(weekly_hours ?? ''),
       finalColor,
       String(sort ?? id).trim(),
+      ['priority', 'equal', 'secondary'].includes(priority) ? priority : 'equal',
       '1',
       new Date().toISOString(),
     ]
@@ -190,13 +191,14 @@ router.put('/employees/:id', requireAuth, requireAdmin, async (req, res, next) =
     const rows = await readTable('employees')
     const idx = rows.findIndex((e) => e.id === req.params.id)
     if (idx === -1) return res.status(404).json({ error: '員工不存在' })
-    const { name, employee_no, employee_type, shift_hours, weekly_hours, active, color, sort, skills } = req.body || {}
+    const { name, employee_no, employee_type, shift_hours, weekly_hours, active, color, sort, priority, skills } = req.body || {}
     if (name !== undefined) rows[idx].name = String(name)
     if (employee_no !== undefined) rows[idx].employee_no = String(employee_no)
     if (employee_type !== undefined) rows[idx].employee_type = employee_type === 'fulltime' ? 'fulltime' : 'parttime'
     if (shift_hours !== undefined) rows[idx].shift_hours = String(shift_hours)
     if (weekly_hours !== undefined) rows[idx].weekly_hours = String(weekly_hours)
     if (sort !== undefined) rows[idx].sort = String(sort)
+    if (priority !== undefined) rows[idx].priority = ['priority', 'equal', 'secondary'].includes(priority) ? priority : 'equal'
     if (active !== undefined) rows[idx].active = active ? '1' : '0'
     if (color !== undefined) {
       const colorVal = String(color).trim()
