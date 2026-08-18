@@ -6,7 +6,6 @@ import { FullScreenLoader, ToastHost } from './components/ui'
 import Login from './views/Login'
 import Schedule from './views/Schedule'
 import Availability from './views/Availability'
-import Generate from './views/Generate'
 import Employees from './views/Employees'
 import ShiftTypes from './views/ShiftTypes'
 import WorkItems from './views/WorkItems'
@@ -42,7 +41,6 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Protected><Schedule /></Protected>} />
         <Route path="/availability" element={<Protected><Availability /></Protected>} />
-        <Route path="/generate" element={<Protected><AdminOnly><Generate /></AdminOnly></Protected>} />
         <Route path="/employees" element={<Protected><AdminOnly><Employees /></AdminOnly></Protected>} />
         <Route path="/shifts" element={<Protected><AdminOnly><ShiftTypes /></AdminOnly></Protected>} />
         <Route path="/work-items" element={<Protected><AdminOnly><WorkItems /></AdminOnly></Protected>} />

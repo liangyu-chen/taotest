@@ -88,7 +88,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     { to: '/users', label: '帳號管理', icon: '⚿', adminOnly: true },
   ].filter((item) => !item.adminOnly || isAdmin)
 
-  // 如果網址不在選單內（例如被移除的 /generate），直接導回首頁
+  // 如果網址不在選單內，直接導回首頁
   if (items.every((i) => i.to !== location.pathname)) {
     return <Navigate to="/" replace />
   }
