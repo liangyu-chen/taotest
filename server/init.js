@@ -10,7 +10,7 @@ import { DEFAULT_ADMIN } from './config.js'
 import { distributeWorkItems } from './scheduler.js'
 
 // schema 版本：任何「建表/遷移/種子」邏輯有改動時請 +1，冷啟動才會重新執行初始化
-const SCHEMA_VERSION = '4'
+const SCHEMA_VERSION = '5'
 
 function readHeader(rows) {
   if (rows.length === 0) return []
@@ -40,8 +40,6 @@ export function createInitializer(db) {
         get(r, 'name'),
         get(r, 'employee_no'),
         get(r, 'employee_type') || 'parttime',
-        get(r, 'shift_hours'),
-        get(r, 'weekly_hours'),
         get(r, 'color'),
         get(r, 'sort'),
         get(r, 'priority') || 'equal',

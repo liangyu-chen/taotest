@@ -230,10 +230,7 @@ export default function Generate() {
                             <td key={s.code}>{p.perShift[s.code] || 0}</td>
                           ))}
                           <td className="table__strong">{p.total}</td>
-                          <td>
-                            {p.hours}
-                            <em className="table__hint">/ {p.targetHours}h</em>
-                          </td>
+                          <td>{p.hours}h</td>
                         </tr>
                       )
                     })}
@@ -241,7 +238,7 @@ export default function Generate() {
                 </table>
               </div>
               <p className="hint">
-                 產生後會覆蓋該月份原有班表；可再到〈班表總覽〉手動微調。目標時數：正職＝平日天數×每班時數；工讀無每週上限，依每班時數×當月天數比例公平輪班。
+                  產生後會覆蓋該月份原有班表；可再到〈班表總覽〉手動微調。依每位員工已累積的排班時數公平輪班，時數少者優先排入。
               </p>
             </section>
           )}

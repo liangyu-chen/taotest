@@ -25,8 +25,6 @@ export interface Employee {
   name: string
   employee_no: string
   employee_type: EmployeeType
-  shift_hours: string
-  weekly_hours: string
   color: string
   sort: string
   priority: EmployeePriority
@@ -173,8 +171,6 @@ export function statusPalette(
 export interface SettingsMap {
   work_start: string
   work_end: string
-  fulltime_shift_hours: string
-  parttime_shift_hours: string
   holidays: string
   max_consecutive_work_days: string
 }
@@ -218,7 +214,6 @@ export interface GenerateSummary {
     employee_id: string
     total: number
     hours: number
-    targetHours: number
     perShift: Record<string, number>
   }[]
 }

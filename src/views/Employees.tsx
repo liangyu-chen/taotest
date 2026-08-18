@@ -86,8 +86,7 @@ export default function Employees() {
                 <th>排序</th>
                 <th>工作技能</th>
                 <th>排班優先權</th>
-                <th>類型</th>
-                <th>每班時數</th>
+                <th>人員類型</th>
                 <th>登入帳號</th>
                 <th>狀態</th>
                 <th className="table__actions">操作</th>
@@ -132,7 +131,6 @@ export default function Employees() {
                         {row.employee_type === 'fulltime' ? '正職' : '工讀'}
                       </span>
                     </td>
-                    <td>{row.shift_hours ? `${row.shift_hours} 小時` : '—'}</td>
                     <td>
                       {acc ? (
                         <code className="mono">{acc.username}</code>
@@ -286,7 +284,6 @@ function EmployeeModal({
   const [no, setNo] = useState(employee?.employee_no || '')
   const [sort, setSort] = useState(employee?.sort || '')
   const [empType, setEmpType] = useState<'fulltime' | 'parttime'>(employee?.employee_type || 'parttime')
-  const [shiftHours, setShiftHours] = useState(employee?.shift_hours || '')
   // 工作技能：可複選（一個員工可同時具備 吧台、內場 等多個工作項目）；必填
   const [skills, setSkills] = useState<string[]>(employee?.skills?.map((s) => s.id) || [])
   // 代表色：編輯時沿用原色；新增時自動挑一個還沒被用的顏色
@@ -324,7 +321,6 @@ function EmployeeModal({
         employee_no: no.trim(),
         sort: sort.trim(),
         employee_type: empType,
-        shift_hours: shiftHours.trim(),
         color,
         active,
         priority,
@@ -393,30 +389,17 @@ function EmployeeModal({
         <Field label="排班優先權">
           <select value={priority} onChange={(e) => setPriority(e.target.value as EmployeePriority)}>
             <option value="priority">優先排班</option>
-            <option value="equal">平等（隨機）</option>
+            <option value="equal">平等</option>
             <option value="secondary">次要排班</option>
           </select>
           <p className="form-hint">自動排班時，條件相同的情況下，優先排班者會先被排入，次要排班者最後。</p>
         </Field>
         <Field label="人員類型">
           <select value={empType} onChange={(e) => setEmpType(e.target.value as 'fulltime' | 'parttime')}>
-            <option value="fulltime">正職（每班固定時數）</option>
-            <option value="parttime">工讀（時數可自由安排）</option>
+            <option value="fulltime">正職</option>
+            <option value="parttime">工讀</option>
           </select>
         </Field>
-        <div className="form-row">
-          <Field label={empType === 'fulltime' ? '每班時數（由排班規則決定）' : '每班時數（留空用預設值）'}>
-            <input
-              type="number"
-              min={1}
-              max={24}
-              value={shiftHours}
-              onChange={(e) => setShiftHours(e.target.value)}
-              disabled={empType === 'fulltime'}
-              placeholder={empType === 'fulltime' ? '規則設定值' : '例如 6'}
-            />
-          </Field>
-        </div>
         <Field label="代表顏色 *（每位員工需不同，班表會以顏色區分員工）">
           {/* 顏色調色盤：已被別人使用的顏色會停用並打紅叉 */}
           <div className="color-picker">

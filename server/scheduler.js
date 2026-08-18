@@ -45,7 +45,7 @@ function settingsMap(settings) {
  * @param {object} options
  * @param {number} options.year
  * @param {number} options.month
- * @param {Array} options.employees   員工（含 id, active, employee_type, shift_hours）
+ * @param {Array} options.employees   員工（含 id, active, employee_type）
  * @param {Array} options.shiftTypes  班別（含 code, sort，OFF 不參與）
  * @param {Array} options.headcounts  人力需求 [{shift_code, day_type, count}]
  * @param {Array} options.availability 排休/偏好 [{employee_id, date, status}]
@@ -58,8 +58,6 @@ function settingsMap(settings) {
 export function generateSchedule({ year, month, employees, shiftTypes, headcounts, availability, settings, workItems = [], employeeSkills = [], closedDays = [], prevAssignments = [] }) {
   const closedSet = closedDays instanceof Set ? closedDays : new Set((closedDays || []).map(Number))
   const cfg = settingsMap(settings)
-  const fulltimeShiftHours = toNum(cfg.fulltime_shift_hours, 8)
-  const parttimeShiftHours = toNum(cfg.parttime_shift_hours, 6)
   const maxConsecutive = toNum(cfg.max_consecutive_work_days, 0)
   // 上個月的年月（跨年時自動扣一年）
   const prevYear = month === 1 ? year - 1 : year
@@ -130,22 +128,11 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     return true
   }
 
-  const hoursPerShift = {}
-  const targetHours = {}
-  const weekdays = []
-  for (let d = 1; d <= days; d++) {
-    if (dayType(d) === 'weekday') weekdays.push(d)
-  }
-  for (const emp of activeEmployees) {
-    if (emp.employee_type === 'fulltime') {
-      hoursPerShift[emp.id] = fulltimeShiftHours
-      targetHours[emp.id] = weekdays.length * fulltimeShiftHours
-    } else {
-      const own = toNum(emp.shift_hours, 0)
-      hoursPerShift[emp.id] = own || parttimeShiftHours
-      targetHours[emp.id] = hoursPerShift[emp.id] * days
-    }
-    if (targetHours[emp.id] <= 0) targetHours[emp.id] = hoursPerShift[emp.id] * days
+  // 以班別的實際開始/結束時間計算每班時數（不再區分正職/工讀）
+  const shiftHoursByCode = {}
+  for (const s of workShifts) {
+    const mins = toMin(s.end_time) - toMin(s.start_time)
+    shiftHoursByCode[s.code] = mins > 0 ? mins / 60 : 8
   }
 
   // 員工排班優先權對照表（priority=優先、equal=平等、secondary=次要）
@@ -240,7 +227,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
 
   function score(empId, shiftCode, dayNum, index, uncovered) {
     let s = 0
-    s += (hoursDone[empId] / Math.max(1, targetHours[empId])) * 1000
+    s += hoursDone[empId] * 10
     s += (codeCount[empId][shiftCode] || 0) * 3
     const streak = consecutiveDaysBefore(empId, dayNum)
     s += streak * streak * 25
@@ -303,7 +290,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         usedToday.add(emp.id)
         const key = `${emp.id}:${dkey}`
         assigned.set(key, shift.code)
-        hoursDone[emp.id] += hoursPerShift[emp.id]
+        hoursDone[emp.id] += shiftHoursByCode[shift.code] || 8
         codeCount[emp.id][shift.code] = (codeCount[emp.id][shift.code] || 0) + 1
         ;(shiftPeople.get(shiftGroupKey(day, shift.code)) || shiftPeople.set(shiftGroupKey(day, shift.code), []).get(shiftGroupKey(day, shift.code))).push(emp.id)
         markCovered(day, shift.code, emp.id)
@@ -368,7 +355,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         usedToday.add(best.id)
         const key = `${best.id}:${dateKey(year, month, day)}`
         assigned.set(key, shift.code)
-        hoursDone[best.id] += hoursPerShift[best.id]
+        hoursDone[best.id] += shiftHoursByCode[shift.code] || 8
         codeCount[best.id][shift.code] = (codeCount[best.id][shift.code] || 0) + 1
         ;(shiftPeople.get(shiftGroupKey(day, shift.code)) || shiftPeople.set(shiftGroupKey(day, shift.code), []).get(shiftGroupKey(day, shift.code))).push(best.id)
         markCovered(day, shift.code, best.id)
@@ -431,7 +418,6 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     employee_id: emp.id,
     total: assignments.filter((a) => a.employee_id === emp.id).length,
     hours: Math.round(hoursDone[emp.id]),
-    targetHours: Math.round(targetHours[emp.id]),
     perShift: codeCount[emp.id] || {},
   }))
 
