@@ -85,6 +85,7 @@ export default function Employees() {
                 <th>員工編號</th>
                 <th>排序</th>
                 <th>工作技能</th>
+                <th>排班優先權</th>
                 <th>類型</th>
                 <th>每班時數</th>
                 <th>登入帳號</th>
@@ -115,6 +116,15 @@ export default function Employees() {
                         </span>
                       ) : (
                         '—'
+                      )}
+                    </td>
+                    <td>
+                      {row.priority === 'priority' ? (
+                        <span className="badge badge--on">優先</span>
+                      ) : row.priority === 'secondary' ? (
+                        <span className="badge badge--admin">次要</span>
+                      ) : (
+                        <span className="badge" style={{ background: '#e5e7eb', color: '#6b7280' }}>平等</span>
                       )}
                     </td>
                     <td>
@@ -380,6 +390,14 @@ function EmployeeModal({
             </div>
           )}
         </Field>
+        <Field label="排班優先權">
+          <select value={priority} onChange={(e) => setPriority(e.target.value as EmployeePriority)}>
+            <option value="priority">優先排班</option>
+            <option value="equal">平等（隨機）</option>
+            <option value="secondary">次要排班</option>
+          </select>
+          <p className="form-hint">自動排班時，條件相同的情況下，優先排班者會先被排入，次要排班者最後。</p>
+        </Field>
         <Field label="人員類型">
           <select value={empType} onChange={(e) => setEmpType(e.target.value as 'fulltime' | 'parttime')}>
             <option value="fulltime">正職（每班固定時數）</option>
@@ -399,14 +417,6 @@ function EmployeeModal({
             />
           </Field>
         </div>
-        <Field label="排班優先權">
-          <select value={priority} onChange={(e) => setPriority(e.target.value as EmployeePriority)}>
-            <option value="priority">優先排班</option>
-            <option value="equal">平等（隨機）</option>
-            <option value="secondary">次要排班</option>
-          </select>
-          <p className="form-hint">自動排班時，條件相同的情況下，優先排班者會先被排入，次要排班者最後。</p>
-        </Field>
         <Field label="代表顏色 *（每位員工需不同，班表會以顏色區分員工）">
           {/* 顏色調色盤：已被別人使用的顏色會停用並打紅叉 */}
           <div className="color-picker">
