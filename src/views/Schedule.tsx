@@ -292,6 +292,7 @@ export default function Schedule() {
   const [isDragging, setIsDragging] = useState(false)                          // 是否正在拖曳（用來停用其他班別的 hover 效果，只突顯被拖曳者）
   const [dotDragId, setDotDragId] = useState<string | null>(null)              // 觸控/舊瀏覽器時，拖曳中的員工 id（dataTransfer 讀不到的 fallback）
   const [generating, setGenerating] = useState(false)                          // 是否正在自動排班
+  const [batchLoading, setBatchLoading] = useState(false)                      // 鎖定/公休日批次操作中
   const [showRules, setShowRules] = useState(false)                            // 是否顯示「排班規則」說明彈窗
   const [selectedDays, setSelectedDays] = useState<Set<number>>(new Set())     // 被選取的日期（點格子選取，可多選）
   const { confirm, dialog } = useConfirm()                                     // 確認彈窗（自動排班/設公休日/刪除共用）
@@ -317,6 +318,7 @@ export default function Schedule() {
   // 鎖定或解除鎖定指定的日期，成功後更新畫面
   const applyLock = async (days: number[], locked: boolean) => {
     if (days.length === 0 || !isAdmin) return
+    setBatchLoading(true)
     try {
       await api('/schedule/locks', {
         method: 'PUT',
@@ -333,6 +335,8 @@ export default function Schedule() {
       toast(locked ? `已鎖定 ${days.length} 天（自動排班不會更動）` : `已解除 ${days.length} 天的鎖定`)
     } catch (err) {
       toast((err as Error).message, 'error')
+    } finally {
+      setBatchLoading(false)
     }
   }
 
@@ -340,6 +344,7 @@ export default function Schedule() {
   // 前端也在本地同步移除對應排班，避免畫面殘留。
   const applyClosed = async (days: number[], closed: boolean) => {
     if (days.length === 0 || !isAdmin) return
+    setBatchLoading(true)
     try {
       await api('/schedule/closed', {
         method: 'PUT',
@@ -361,6 +366,8 @@ export default function Schedule() {
       await data.reload({ silent: true })
     } catch (err) {
       toast((err as Error).message, 'error')
+    } finally {
+      setBatchLoading(false)
     }
   }
 
@@ -412,12 +419,12 @@ export default function Schedule() {
       })
       data.setAssignments(res.assignments)
       data.reload()
-      const unfilledCount = res.unfilled.length
+      const unfilledDays = new Set(res.unfilled.map((u) => u.day)).size
       toast(
-        unfilledCount > 0
-          ? `已產生班表（${res.summary.totalSlots} 班），但有 ${unfilledCount} 個時段人力/工作未滿足`
-          : `已產生班表：共 ${res.summary.totalSlots} 班`,
-        unfilledCount > 0 ? 'error' : 'ok',
+        unfilledDays > 0
+          ? `已產生班表，但有 ${unfilledDays} 天人力/工作未滿足`
+          : `已產生班表`,
+        unfilledDays > 0 ? 'error' : 'ok',
       )
     } catch (e) {
       toast((e as Error).message, 'error')
@@ -777,6 +784,7 @@ export default function Schedule() {
               <button
                 type="button"
                 className="btn btn--tiny btn--ghost"
+                disabled={batchLoading}
                 onClick={(e) => {
                   e.stopPropagation()
                   void applyClosed([day], false)
@@ -1078,6 +1086,7 @@ export default function Schedule() {
             <button
               type="button"
               className={`cal-cell__lock${isLocked ? ' cal-cell__lock--on' : ''}`}
+              disabled={batchLoading}
               onClick={(e) => {
                 e.stopPropagation()
                 void applyLock([day], !isLocked)
@@ -1235,6 +1244,11 @@ export default function Schedule() {
   // —— 頁面本體：標題列（月份切換 + 自動排班按鈕）——
   return (
     <div className="view">
+      {batchLoading && (
+        <div className="loading-overlay">
+          <Spinner label="處理中…" />
+        </div>
+      )}
       <div className="view__head">
         <div className="view__head-left">
           <MonthNav year={year} month={month} onChange={(y, m) => { data.setYear(y); data.setMonth(m) }} />
@@ -1283,15 +1297,16 @@ export default function Schedule() {
             {[...selectedDays].some((d) => lockedDays.includes(d)) && '（含已鎖定天）'}
             {[...selectedDays].some((d) => closedDays.includes(d)) && '（含公休日）'}
           </span>
-          <button type="button" className="btn btn--small btn--primary" onClick={() => void applyLock([...selectedDays], true)}>
+          <button type="button" className="btn btn--small btn--primary" disabled={batchLoading} onClick={() => void applyLock([...selectedDays], true)}>
             🔒 鎖定所選
           </button>
-          <button type="button" className="btn btn--small" onClick={() => void applyLock([...selectedDays], false)}>
+          <button type="button" className="btn btn--small" disabled={batchLoading} onClick={() => void applyLock([...selectedDays], false)}>
             🔓 解除鎖定
           </button>
           <button
             type="button"
             className="btn btn--small btn--danger"
+            disabled={batchLoading}
             onClick={() => void handleClosedClick([...selectedDays])}
             title="設為公休日：當天不營業，自動排班會跳過；既有排班人員會被清空"
           >
@@ -1300,13 +1315,13 @@ export default function Schedule() {
           <button
             type="button"
             className="btn btn--small"
+            disabled={batchLoading}
             onClick={() => void applyClosed([...selectedDays], false)}
             title="解除公休日：恢復當天營業，自動排班會重新安排"
           >
-            <span className="icon-sq icon-sq--yellow" aria-hidden="true">営</span>
             解除公休日
           </button>
-          <button type="button" className="btn btn--small" onClick={() => setSelectedDays(new Set())}>
+          <button type="button" className="btn btn--small" disabled={batchLoading} onClick={() => setSelectedDays(new Set())}>
             取消選取
           </button>
         </div>
@@ -1526,6 +1541,9 @@ export default function Schedule() {
               <ul>
                 <li>那天排休、或班別時間跟「沒空時段」撞到 → 不排。</li>
                 <li>連續上超過設定天數（如 6 天）→ 當天休息。</li>
+                <li>
+                  <b>正職月休天數</b>：正職員工本月排班數不超過（月天數 − 月休天數）。例如本月31天、月休10天，則正職最多排21天班。達到上限後不再排入，多出來的班由其他人補。工讀生不受此限制。
+                </li>
               </ul>
             </section>
             <section>
