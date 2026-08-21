@@ -633,6 +633,13 @@ export default function Schedule() {
   const todayKey = dateKey(now.getFullYear(), now.getMonth() + 1, now.getDate())
   const workShifts = shiftTypes.filter((s) => s.code !== 'OFF')
 
+  // 早班 = 開始時間最早的班別（與 scheduler.js 同邏輯）
+  const morningShiftCode = (() => {
+    const withTime = workShifts.filter((s) => s.start_time)
+    if (withTime.length === 0) return ''
+    return withTime.reduce((a, b) => (a.start_time < b.start_time ? a : b)).code
+  })()
+
   // 把「拖曳中的員工」放進某天某班別：檢查當日是否已排班，然後打開指派彈窗（shiftCode 已預選）
   const dropToAssign = (day: number, shiftCode: string | null, e: React.DragEvent) => {
     // iOS Safari 在 drop 時讀不到 dataTransfer 的自訂型別，改用 state 追蹤的來源員工 id
@@ -848,6 +855,20 @@ export default function Schedule() {
       const overConsecutive =
         maxConsecutiveWorkDays > 0 && consecutiveDaysOf(slot.assignment!.employee_id, day) > maxConsecutiveWorkDays
       const code = slot.assignment!.shift_code
+      // 前一天晚班 → 今天早班
+      const isNightToMorning = (() => {
+        if (code !== morningShiftCode) return false
+        let prevY = year, prevM = month, prevD = day - 1
+        if (prevD < 1) { prevM = month === 1 ? 12 : month - 1; prevY = month === 1 ? year - 1 : year; prevD = daysInMonth(prevY, prevM) }
+        const prev = assignments.find((a) => a.employee_id === slot.assignment!.employee_id && a.year === prevY && a.month === prevM && a.day === prevD)
+        if (!prev || prev.shift_code === 'OFF') return false
+        const prevShift = shiftById.get(prev.shift_code)
+        if (!prevShift?.end_time || !prevShift?.start_time) return false
+        let endMin = Number(prevShift.end_time.split(':')[0]) * 60 + Number(prevShift.end_time.split(':')[1])
+        const startMin = Number(prevShift.start_time.split(':')[0]) * 60 + Number(prevShift.start_time.split(':')[1])
+        if (endMin <= startMin) endMin += 1440
+        return endMin >= 1260
+      })()
       return (
         <button
           key={`${code}:${slot.assignment!.employee_id}`}
@@ -946,10 +967,10 @@ export default function Schedule() {
             }
             dropToAssign(day, slot.assignment!.shift_code, ev)
           }}
-          title={`${isAdmin && !isLocked ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : isLocked ? '此日已鎖定，無法更動排班。' : ''}${shift?.name || ''}・${name}${timeOf(slot.assignment!) ? `（時段：${timeOf(slot.assignment!)}）` : ''}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}`}
+          title={`${isAdmin && !isLocked ? '點擊修改此班／拖曳員工圓點到此可新增人員；拖曳此方塊到其他班別可置換、到下方區塊可移除。' : isLocked ? '此日已鎖定，無法更動排班。' : ''}${shift?.name || ''}・${name}${timeOf(slot.assignment!) ? `（時段：${timeOf(slot.assignment!)}）` : ''}${slot.assignment!.note ? `（備註：${slot.assignment!.note}）` : ''}${conflict ? `（注意：當日標記「${statusLabel(rec)}」）` : ''}${isNightToMorning ? '（注意：前一天排晚班，不宜早班）' : ''}`}
         >
-          {(conflict || overConsecutive) && (
-            <span className="shift-chip__warn" title={`${name}${conflict ? ` 當日標記「${statusLabel(rec)}」` : ' 連續上班天數已超過上限'}`}>
+          {(conflict || overConsecutive || isNightToMorning) && (
+            <span className="shift-chip__warn" title={`${name}${conflict ? ` 當日標記「${statusLabel(rec)}」` : isNightToMorning ? ' 前一天排晚班，不宜早班' : ' 連續上班天數已超過上限'}`}>
               ⚠
             </span>
           )}
@@ -1445,6 +1466,7 @@ export default function Schedule() {
           employees={employees}
           workItems={workItems}
           assignedDay={assignments.filter((a) => a.day === editing.day)}
+          allAssignments={assignments}
           maxConsecutiveWorkDays={maxConsecutiveWorkDays}
           consecutiveDaysOf={consecutiveDaysOf}
           availByKey={availByKey}
@@ -1541,6 +1563,7 @@ export default function Schedule() {
               <ul>
                 <li>那天排休、或班別時間跟「沒空時段」撞到 → 不排。</li>
                 <li>連續上超過設定天數（如 6 天）→ 當天休息。</li>
+                <li>前一天排了晚班（結束時間 &ge; 21:00）→ 今天不排早班（開始時間 &lt; 12:00）。</li>
                 <li>
                   <b>正職月休天數</b>：正職員工本月排班數不超過（月天數 − 月休天數）。例如本月31天、月休10天，則正職最多排21天班。達到上限後不再排入，多出來的班由其他人補。工讀生不受此限制。
                 </li>
@@ -1746,6 +1769,7 @@ function AssignModal({
   employees,
   workItems,
   assignedDay,
+  allAssignments,
   maxConsecutiveWorkDays,
   consecutiveDaysOf,
   availByKey,
@@ -1760,6 +1784,7 @@ function AssignModal({
   employees: Employee[]
   workItems: WorkItem[]
   assignedDay: Assignment[]
+  allAssignments: Assignment[]
   maxConsecutiveWorkDays: number
   consecutiveDaysOf: (empId: string, targetDay: number) => number
   availByKey: Map<string, Availability>
@@ -1822,6 +1847,25 @@ function AssignModal({
   // 檢查「要新增的人員」當天是否排休
   const addAvailRec = addTargetId ? availByKey.get(`${addTargetId}:${dateKey(year, month, day)}`) : undefined
   const addIsOff = addAvailRec?.status === 'off'
+
+  // 前一天晚班 → 今天不能早班
+  const addNightToMorning = (() => {
+    if (!addTargetId) return false
+    const withTime = workTypes.filter((s) => s.start_time)
+    if (withTime.length === 0) return false
+    const morningCode = withTime.reduce((a, b) => (a.start_time < b.start_time ? a : b)).code
+    if (shiftCode !== morningCode) return false
+    let prevY = year, prevM = month, prevD = day - 1
+    if (prevD < 1) { prevM = month === 1 ? 12 : month - 1; prevY = month === 1 ? year - 1 : year; prevD = daysInMonth(prevY, prevM) }
+    const prev = allAssignments.find((a) => a.employee_id === addTargetId && a.year === prevY && a.month === prevM && a.day === prevD)
+    if (!prev || prev.shift_code === 'OFF') return false
+    const prevShift = shiftTypes.find((s) => s.code === prev.shift_code)
+    if (!prevShift?.end_time || !prevShift?.start_time) return false
+    let endMin = Number(prevShift.end_time.split(':')[0]) * 60 + Number(prevShift.end_time.split(':')[1])
+    const startMin = Number(prevShift.start_time.split(':')[0]) * 60 + Number(prevShift.start_time.split(':')[1])
+    if (endMin <= startMin) endMin += 1440
+    return endMin >= 1260
+  })()
 
   // 把「1,2」逗號分隔的工作項目 id 字串轉成陣列（供勾選框比對）
   const workItemIdsOf = (raw?: string): string[] =>
@@ -2102,6 +2146,11 @@ function AssignModal({
         {addTargetEmp && addIsOff && (
           <p className="assign-warn">
             ⚠ <b>{addTargetEmp.name}</b> 已於 {month} 月 {day} 日<b>排休</b>，仍要將其排入此班嗎？請確認是否要繼續，或另選他人。
+          </p>
+        )}
+        {addTargetEmp && addNightToMorning && (
+          <p className="assign-warn">
+            ⚠ <b>{addTargetEmp.name}</b> 前一天排了晚班，不宜排入早班。請確認是否要繼續，或另選他人。
           </p>
         )}
         <p className="hint">

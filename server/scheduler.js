@@ -89,6 +89,15 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     return dayType(dayNum) === 'weekday' && shiftCode === morningShiftCode
   }
 
+  // 晚班 = 結束時間 ≥ 21:00（1260 分）；跨日班別（end ≤ start）加 24h 再判
+  const nightShiftCodes = new Set()
+  for (const s of workShifts) {
+    let end = toMin(s.end_time)
+    const start = toMin(s.start_time)
+    if (end !== null && start !== null && end <= start) end += 1440
+    if (end !== null && end >= 1260) nightShiftCodes.add(s.code)
+  }
+
   const headcountMap = {}
   for (const h of headcounts) {
     headcountMap[`${h.shift_code}:${h.day_type}`] = Number(h.count) || 0
@@ -126,6 +135,17 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
       if (un) {
         if (sMin < un[1] && eMin > un[0]) return false
       }
+    }
+    // 前一天晚班（結束 ≥ 21:00）→ 今天不能早班（開始 < 12:00）
+    if (shift.code === morningShiftCode && nightShiftCodes.size > 0) {
+      let prevY = year, prevM = month, prevD = dayNum - 1
+      if (prevD < 1) {
+        prevM = month === 1 ? 12 : month - 1
+        prevY = month === 1 ? year - 1 : year
+        prevD = daysInMonth(prevY, prevM)
+      }
+      const prevCode = assigned.get(`${empId}:${dateKey(prevY, prevM, prevD)}`)
+      if (prevCode && nightShiftCodes.has(prevCode)) return false
     }
     return true
   }
