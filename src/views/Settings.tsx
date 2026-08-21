@@ -92,6 +92,23 @@ export default function Settings() {
           </section>
 
           <section className="panel">
+            <h3 className="panel__title">正職月休天數</h3>
+            <div className="form-grid">
+              <Field label="正職員工每月最少休假天數（0 = 不限制）">
+                <input
+                  type="number"
+                  min={0}
+                  max={31}
+                  placeholder="0"
+                  value={cfg.monthly_off_days}
+                  onChange={(e) => set('monthly_off_days', e.target.value)}
+                />
+              </Field>
+            </div>
+            <p className="hint">自動排班時，正職員工本月排班數不超過（月天數 − 此值）。設定 0 表示不限制。工讀生不受此限制。</p>
+          </section>
+
+          <section className="panel">
             <h3 className="panel__title">例假日</h3>
             <label className="field">
               <span className="field__label">例假日日期（一行一天，格式 2026-01-01）</span>

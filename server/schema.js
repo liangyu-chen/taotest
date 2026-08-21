@@ -46,6 +46,7 @@ export const EMPLOYEE_COLORS = [
 export const DEFAULT_SETTINGS = [
   ['max_consecutive_work_days', '6', '每人每週最多連續工作天數（0 = 不限制）'],
   ['holidays', '', '例假日日期，一行一天（格式 2026-01-01）'],
+  ['monthly_off_days', '0', '正職員工每月最少休假天數（0 = 不限制）'],
 ]
 
 // 產生下一個 id（傳入某張表的資料列，回傳目前最大 id + 1）

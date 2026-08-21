@@ -173,6 +173,7 @@ export interface SettingsMap {
   work_end: string
   holidays: string
   max_consecutive_work_days: string
+  monthly_off_days: string
 }
 
 // 排休/時段：某員工某天的狀態。

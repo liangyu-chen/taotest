@@ -59,6 +59,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
   const closedSet = closedDays instanceof Set ? closedDays : new Set((closedDays || []).map(Number))
   const cfg = settingsMap(settings)
   const maxConsecutive = toNum(cfg.max_consecutive_work_days, 0)
+  const monthlyOffDays = toNum(cfg.monthly_off_days, 0)
   // 上個月的年月（跨年時自動扣一年）
   const prevYear = month === 1 ? year - 1 : year
   const prevMonth = month === 1 ? 12 : month - 1
@@ -70,6 +71,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
   )
 
   const days = daysInMonth(year, month)
+  const maxWorkDays = monthlyOffDays > 0 ? days - monthlyOffDays : Infinity
   const activeEmployees = employees.filter((e) => String(e.active) !== '0' && String(e.active) !== 'false' && e.active !== '')
 
   const workShifts = shiftTypes
@@ -147,6 +149,11 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
   for (const emp of activeEmployees) {
     hoursDone[emp.id] = 0
     codeCount[emp.id] = {}
+  }
+  // 正職月休天數：追蹤每人已排入班數，超過上限時不再排入
+  const empWorkDays = {}
+  for (const emp of activeEmployees) {
+    empWorkDays[emp.id] = 0
   }
   // 先把「上個月的排班」也放進 assigned，這樣本月初的連續上班天數能回溯到上個月
   for (const a of prevAssignments || []) {
@@ -280,6 +287,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         .filter((emp) => {
           if (usedToday.has(emp.id)) return false
           if (overConsecutive(emp.id, day)) return false
+          if (emp.employee_type === 'fulltime' && empWorkDays[emp.id] >= maxWorkDays) return false
           if (preferMap[`${emp.id}:${dkey}`] !== shift.code) return false
           return canWork(emp.id, day, shift)
         })
@@ -294,6 +302,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         codeCount[emp.id][shift.code] = (codeCount[emp.id][shift.code] || 0) + 1
         ;(shiftPeople.get(shiftGroupKey(day, shift.code)) || shiftPeople.set(shiftGroupKey(day, shift.code), []).get(shiftGroupKey(day, shift.code))).push(emp.id)
         markCovered(day, shift.code, emp.id)
+        empWorkDays[emp.id]++
         filled++
       }
       if (filled) assignedToday[shift.code] = filled
@@ -308,6 +317,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         const candidates = activeEmployees.filter((emp) => {
           if (usedToday.has(emp.id)) return false
           if (overConsecutive(emp.id, day)) return false
+          if (emp.employee_type === 'fulltime' && empWorkDays[emp.id] >= maxWorkDays) return false
           return canWork(emp.id, day, shift)
         })
         if (candidates.length === 0) {
@@ -359,6 +369,7 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         codeCount[best.id][shift.code] = (codeCount[best.id][shift.code] || 0) + 1
         ;(shiftPeople.get(shiftGroupKey(day, shift.code)) || shiftPeople.set(shiftGroupKey(day, shift.code), []).get(shiftGroupKey(day, shift.code))).push(best.id)
         markCovered(day, shift.code, best.id)
+        empWorkDays[best.id]++
       }
     }
   }
