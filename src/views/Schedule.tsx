@@ -56,16 +56,8 @@ function toMinOf(v?: string): number | null {
 }
 
 // 早班＝開始時間最早的班別（例如 12:00 的 M 班）
-function morningShiftCodeOf(shiftTypes: ShiftType[]): string | null {
-  const withTime = shiftTypes.filter((s) => toMinOf(s.start_time) !== null)
-  if (withTime.length === 0) return null
-  return withTime.reduce((a, b) => (toMinOf(a.start_time)! < toMinOf(b.start_time)! ? a : b)).code
-}
-
-// 檢核「開始時間」是否與班別設定一致（與後端 shiftStartError 同步）：
-// 1. 每個班別都不可晚於「下一個班別」的開始時間（例如午班 14:00、晚班 16:00，
-//    午班 17:00 開始已屬晚班時段）；最後一班無上限。
-// 2. 非早班：不可早於設定的開始時間；早班允許比設定更早。回傳 '' = 沒問題。
+// 檢核「開始時間」是否合理（與後端 shiftStartError 同步）：
+// 每個班別都不可晚於「下一個班別」的開始時間；最後一班無上限。
 function shiftStartErrorOf(shiftTypes: ShiftType[], shiftCode: string, startTime: string): string {
   const shift = shiftTypes.find((s) => s.code === shiftCode)
   if (!shift || !shift.start_time) return ''
@@ -73,7 +65,7 @@ function shiftStartErrorOf(shiftTypes: ShiftType[], shiftCode: string, startTime
   const cfg = toMinOf(shift.start_time)
   if (sm === null || cfg === null) return ''
 
-  // 1. 所有班別：不可晚於「開始時間比這班晚」的班別中最接近的一班
+  // 所有班別：不可晚於「開始時間比這班晚」的班別中最接近的一班
   let nextCode: string | null = null
   let nextMin = Infinity
   for (const s of shiftTypes) {
@@ -88,10 +80,6 @@ function shiftStartErrorOf(shiftTypes: ShiftType[], shiftCode: string, startTime
     return `「${shift.name}」的開始時間不可晚於 ${nextShift?.start_time || ''}（此時段已屬下一班），請調整時間`
   }
 
-  // 2. 非早班：不可早於設定的開始時間（早班允許提早）
-  if (morningShiftCodeOf(shiftTypes) !== shiftCode && sm < cfg) {
-    return `「${shift.name}」的開始時間不可早於設定的 ${shift.start_time}，請調整時間`
-  }
   return ''
 }
 
