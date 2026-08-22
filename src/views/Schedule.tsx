@@ -859,8 +859,10 @@ export default function Schedule() {
       const isNightToMorning = (() => {
         if (code !== morningShiftCode) return false
         let prevY = year, prevM = month, prevD = day - 1
-        if (prevD < 1) { prevM = month === 1 ? 12 : month - 1; prevY = month === 1 ? year - 1 : year; prevD = daysInMonth(prevY, prevM) }
-        const prev = assignments.find((a) => a.employee_id === slot.assignment!.employee_id && a.year === prevY && a.month === prevM && a.day === prevD)
+        let crossedMonth = false
+        if (prevD < 1) { prevM = month === 1 ? 12 : month - 1; prevY = month === 1 ? year - 1 : year; prevD = daysInMonth(prevY, prevM); crossedMonth = true }
+        const pool = crossedMonth ? prevAssignments : assignments
+        const prev = pool.find((a) => a.employee_id === slot.assignment!.employee_id && a.year === prevY && a.month === prevM && a.day === prevD)
         if (!prev || prev.shift_code === 'OFF') return false
         // 優先用排班紀錄的實際時段；若無則 fallback 到班別設定
         const prevShiftDef = shiftById.get(prev.shift_code)
@@ -1470,6 +1472,7 @@ export default function Schedule() {
           workItems={workItems}
           assignedDay={assignments.filter((a) => a.day === editing.day)}
           allAssignments={assignments}
+          prevAssignments={prevAssignments}
           maxConsecutiveWorkDays={maxConsecutiveWorkDays}
           consecutiveDaysOf={consecutiveDaysOf}
           availByKey={availByKey}
@@ -1773,6 +1776,7 @@ function AssignModal({
   workItems,
   assignedDay,
   allAssignments,
+  prevAssignments: prevAssignmentsRaw,
   maxConsecutiveWorkDays,
   consecutiveDaysOf,
   availByKey,
@@ -1788,6 +1792,7 @@ function AssignModal({
   workItems: WorkItem[]
   assignedDay: Assignment[]
   allAssignments: Assignment[]
+  prevAssignments?: Assignment[]
   maxConsecutiveWorkDays: number
   consecutiveDaysOf: (empId: string, targetDay: number) => number
   availByKey: Map<string, Availability>
@@ -1859,8 +1864,10 @@ function AssignModal({
     const morningCode = withTime.reduce((a, b) => (a.start_time < b.start_time ? a : b)).code
     if (shiftCode !== morningCode) return false
     let prevY = year, prevM = month, prevD = day - 1
-    if (prevD < 1) { prevM = month === 1 ? 12 : month - 1; prevY = month === 1 ? year - 1 : year; prevD = daysInMonth(prevY, prevM) }
-    const prev = allAssignments.find((a) => a.employee_id === addTargetId && a.year === prevY && a.month === prevM && a.day === prevD)
+    let crossedMonth = false
+    if (prevD < 1) { prevM = month === 1 ? 12 : month - 1; prevY = month === 1 ? year - 1 : year; prevD = daysInMonth(prevY, prevM); crossedMonth = true }
+    const pool = crossedMonth ? (prevAssignmentsRaw || []) : allAssignments
+    const prev = pool.find((a) => a.employee_id === addTargetId && a.year === prevY && a.month === prevM && a.day === prevD)
     if (!prev || prev.shift_code === 'OFF') return false
     const prevShiftDef = shiftTypes.find((s) => s.code === prev.shift_code)
     const prevEndRaw = prev.end_time || prevShiftDef?.end_time
