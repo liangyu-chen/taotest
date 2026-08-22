@@ -423,6 +423,33 @@ export default function Schedule() {
     }
   }
 
+  // 單日自動排班：只重排某一天，不動其他天
+  const runGenerateDay = async (targetDay: number) => {
+    if (generating) return
+    const startedAt = Date.now()
+    setGenerating(true)
+    try {
+      const res = await api<{ assignments: Assignment[]; unfilled: { day: number; shift_code: string }[]; summary: { totalSlots: number; employees: number } }>('/schedule/generate', {
+        method: 'POST',
+        body: { year, month, day: targetDay },
+      })
+      // 只更新該天的排班
+      data.setAssignments((prev) => [...prev.filter((a) => a.day !== targetDay), ...res.assignments])
+      const unfilled = res.unfilled.filter((u) => u.day === targetDay)
+      toast(
+        unfilled.length > 0
+          ? `已重排 ${month}/${targetDay}，但有班別人力/工作未滿足`
+          : `已重排 ${month}/${targetDay}`,
+        unfilled.length > 0 ? 'error' : 'ok',
+      )
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    } finally {
+      const remain = 1000 - (Date.now() - startedAt)
+      setTimeout(() => setGenerating(false), Math.max(0, remain))
+    }
+  }
+
   // 把「員工陣列」轉成「ID → 員工」的查詢表，方便直接查姓名/顏色
   const empById = useMemo(() => {
     const m = new Map<string, Employee>()
@@ -1097,6 +1124,20 @@ export default function Schedule() {
         {/* 右下角鎖頭：固定不動，方便一眼看出哪幾天被鎖定 */}
         {isAdmin && (
           <span className="cal-cell__corner">
+            {!isLocked && (
+              <button
+                type="button"
+                className="cal-cell__refresh"
+                disabled={generating || isClosed}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void runGenerateDay(day)
+                }}
+                title="重排此日：只重新自動排班這一天，不影響其他天"
+              >
+                🔄
+              </button>
+            )}
             <button
               type="button"
               className={`cal-cell__lock${isLocked ? ' cal-cell__lock--on' : ''}`}

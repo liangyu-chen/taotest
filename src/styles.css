@@ -1241,6 +1241,38 @@ html[data-view="desktop"] .cal-cell--locked .cal-emp {
   transition: opacity 0.15s, filter 0.15s;
 }
 
+.cal-cell__refresh {
+  position: absolute;
+  right: 24px;
+  bottom: 5px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.45;
+  filter: grayscale(0.4);
+  transition: opacity 0.15s, filter 0.15s;
+}
+
+.cal-cell__refresh:hover {
+  opacity: 1;
+  filter: none;
+}
+
+.cal-cell__refresh:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
 .cal-cell__lock:hover {
   opacity: 1;
   filter: none;
@@ -1252,20 +1284,47 @@ html[data-view="desktop"] .cal-cell--locked .cal-emp {
   background: rgba(124, 58, 237, 0.14);
 }
 
-/* 右下角鎖頭快捷 */
+/* 右下角快捷按鈕 */
 .cal-cell__corner {
   position: absolute;
   right: 5px;
   bottom: 5px;
   z-index: 2;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 3px;
 }
 
 .cal-cell__corner .cal-cell__lock {
   position: static;
+}
+
+.cal-cell__corner .cal-cell__refresh {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+
+.cal-cell__corner .cal-cell__refresh:hover {
+  opacity: 1;
+}
+
+.cal-cell__corner .cal-cell__refresh:disabled {
+  opacity: 0.2;
+  cursor: default;
 }
 
 .lock-toolbar,

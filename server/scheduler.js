@@ -54,8 +54,10 @@ function settingsMap(settings) {
  * @param {Array} options.employeeSkills 員工技能 [{employee_id, work_item_id}]
  * @param {Array<number>|Set<number>} options.closedDays 公休日（當天不營業，直接跳過不排班）
  * @param {Array} options.prevAssignments 上個月的排班 [{year, month, day, employee_id, ...}]（跨月連續上班天數用）
+ * @param {number} [options.targetDay]  只排某一天（單日自動排班模式），其餘天保留既有排班
+ * @param {Array} [options.existingAssignments]  當月既有排班（targetDay 模式下用來 seed 其餘天的 context）
  */
-export function generateSchedule({ year, month, employees, shiftTypes, headcounts, availability, settings, workItems = [], employeeSkills = [], closedDays = [], prevAssignments = [] }) {
+export function generateSchedule({ year, month, employees, shiftTypes, headcounts, availability, settings, workItems = [], employeeSkills = [], closedDays = [], prevAssignments = [], targetDay = null, existingAssignments = [] }) {
   const closedSet = closedDays instanceof Set ? closedDays : new Set((closedDays || []).map(Number))
   const cfg = settingsMap(settings)
   const maxConsecutive = toNum(cfg.max_consecutive_work_days, 0)
@@ -195,6 +197,24 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     assigned.set(`${a.employee_id}:${dateKey(prevYear, prevMonth, Number(a.day))}`, a.shift_code || '')
   }
 
+  // 單日模式：先把當月所有既有排班 seed 進 assigned，再清掉 targetDay 讓排班器重排
+  if (targetDay !== null) {
+    for (const a of existingAssignments || []) {
+      if (!a.employee_id || !a.day || Number(a.day) === targetDay) continue
+      assigned.set(`${a.employee_id}:${dateKey(year, month, Number(a.day))}`, a.shift_code || '')
+    }
+    // 預先計算每人的累計時數、班別次數、已排天數（讓公平性分數正確）
+    for (const a of existingAssignments || []) {
+      if (!a.employee_id || !a.day || Number(a.day) === targetDay) continue
+      const code = a.shift_code
+      if (!code || code === 'OFF') continue
+      hoursDone[a.employee_id] = (hoursDone[a.employee_id] || 0) + (shiftHoursByCode[code] || 8)
+      if (!codeCount[a.employee_id]) codeCount[a.employee_id] = {}
+      codeCount[a.employee_id][code] = (codeCount[a.employee_id][code] || 0) + 1
+      empWorkDays[a.employee_id] = (empWorkDays[a.employee_id] || 0) + 1
+    }
+  }
+
   // —— 工作項目（吧台/內場…）相關狀態 ——
   const skillsByEmp = new Map() // empId → Set<workItemId>
   for (const s of employeeSkills) {
@@ -305,7 +325,9 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
 
   const unfilled = []
 
-  for (let day = 1; day <= days; day++) {
+  const loopStart = targetDay !== null ? targetDay : 1
+  const loopEnd = targetDay !== null ? targetDay : days
+  for (let day = loopStart; day <= loopEnd; day++) {
     if (closedSet.has(day)) continue
     const type = dayType(day)
     const usedToday = new Set()

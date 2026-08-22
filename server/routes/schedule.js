@@ -232,6 +232,7 @@ router.put('/schedule/locks', requireAuth, requireAdmin, async (req, res, next) 
 router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { y, m } = monthBounds(req.body.year, req.body.month)
+    const targetDay = req.body.day ? Number(req.body.day) : null
     const [employees, shiftTypes, headcounts, availability, settings, lockRows, wi, employeeSkills, closedRows] =
       await Promise.all([
         readTable('employees'),
@@ -265,6 +266,22 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
     const closedDays = new Set(
       closedRows.filter((r) => Number(r.year) === y && Number(r.month) === m).map((r) => Number(r.day)),
     )
+
+    // 單日模式：載入當月既有排班作為 context
+    let existingAssignments = []
+    if (targetDay !== null) {
+      const curRows = await selectWhere('schedule', { year: String(y), month: String(m) })
+      existingAssignments = curRows.map((a) => ({
+        year: Number(a.year),
+        month: Number(a.month),
+        day: Number(a.day),
+        shift_code: a.shift_code,
+        employee_id: String(a.employee_id),
+        start_time: a.start_time || '',
+        end_time: a.end_time || '',
+      }))
+    }
+
     const result = generateSchedule({
       year: y,
       month: m,
@@ -277,36 +294,61 @@ router.post('/schedule/generate', requireAuth, requireAdmin, async (req, res, ne
       employeeSkills,
       closedDays,
       prevAssignments,
+      targetDay,
+      existingAssignments,
     })
 
-    const headers = TABLES.schedule
-    const existing = await readTable('schedule')
-    // 保留「非本月」的舊資料 + 「本月但已鎖定」的既有排班；公休日一併清空
-    const keep = existing.filter(
-      (a) => !(Number(a.year) === y && Number(a.month) === m) || (lockedDays.has(Number(a.day)) && !closedDays.has(Number(a.day))),
-    )
-    // 自動排班的結果排除已鎖定與公休日期（那些日期維持原狀）
-    const newRows = result.assignments
-      .filter((a) => !lockedDays.has(a.day) && !closedDays.has(a.day))
-      .map((a) => [
-        String(a.year),
-        String(a.month),
-        String(a.day),
-        a.shift_code,
-        String(a.employee_id),
-        a.note || '',
-        a.work_item || '',
-        a.start_time || '',
-        a.end_time || '',
-      ])
-    const rows = [
-      headers,
-      ...keep.map((r) => headers.map((h) => r[h] ?? '')),
-      ...newRows.map((r) => r.slice()),
-    ]
-    await replaceRows('schedule', rows)
+    if (targetDay !== null) {
+      // 單日模式：只替換該天的排班
+      if (lockedDays.has(targetDay)) {
+        return res.status(409).json({ error: `此日（${m}/${targetDay}）已鎖定，無法重排` })
+      }
+      if (closedDays.has(targetDay)) {
+        return res.status(400).json({ error: `此日（${m}/${targetDay}）為公休日，無需排班` })
+      }
+      // 刪除該天既有排班 + 寫入新排班
+      await deleteWhere('schedule', { year: String(y), month: String(m), day: String(targetDay) })
+      const newRows = result.assignments
+        .filter((a) => a.day === targetDay && !lockedDays.has(a.day) && !closedDays.has(a.day))
+      if (newRows.length > 0) {
+        await appendRows(
+          'schedule',
+          newRows.map((a) => [
+            String(a.year), String(a.month), String(a.day), a.shift_code, String(a.employee_id),
+            a.note || '', a.work_item || '', a.start_time || '', a.end_time || '',
+          ]),
+        )
+      }
+      result.unfilled = result.unfilled.filter((u) => !lockedDays.has(u.day) && !closedDays.has(u.day))
+    } else {
+      // 整月模式：保留非本月 + 已鎖定的排班，其餘替換
+      const headers = TABLES.schedule
+      const existing = await readTable('schedule')
+      const keep = existing.filter(
+        (a) => !(Number(a.year) === y && Number(a.month) === m) || (lockedDays.has(Number(a.day)) && !closedDays.has(Number(a.day))),
+      )
+      const newRows = result.assignments
+        .filter((a) => !lockedDays.has(a.day) && !closedDays.has(a.day))
+        .map((a) => [
+          String(a.year),
+          String(a.month),
+          String(a.day),
+          a.shift_code,
+          String(a.employee_id),
+          a.note || '',
+          a.work_item || '',
+          a.start_time || '',
+          a.end_time || '',
+        ])
+      const rows = [
+        headers,
+        ...keep.map((r) => headers.map((h) => r[h] ?? '')),
+        ...newRows.map((r) => r.slice()),
+      ]
+      await replaceRows('schedule', rows)
+      result.unfilled = result.unfilled.filter((u) => !lockedDays.has(u.day) && !closedDays.has(u.day))
+    }
 
-    result.unfilled = result.unfilled.filter((u) => !lockedDays.has(u.day) && !closedDays.has(u.day))
     res.json(result)
   } catch (e) {
     next(e)
