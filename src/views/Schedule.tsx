@@ -1939,7 +1939,7 @@ function AssignModal({
     if (!ok(s) || !ok(e)) return false
     const sm = Number(s.split(':')[0]) * 60 + Number(s.split(':')[1])
     const em = Number(e.split(':')[0]) * 60 + Number(e.split(':')[1])
-    return em > sm
+    return em !== sm // 同時間才不合理；跨日（em < sm）是合理的
   }
 
   // 同一人日的唯一鍵（每人每天只會在一班）
