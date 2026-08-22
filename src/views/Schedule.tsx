@@ -862,10 +862,13 @@ export default function Schedule() {
         if (prevD < 1) { prevM = month === 1 ? 12 : month - 1; prevY = month === 1 ? year - 1 : year; prevD = daysInMonth(prevY, prevM) }
         const prev = assignments.find((a) => a.employee_id === slot.assignment!.employee_id && a.year === prevY && a.month === prevM && a.day === prevD)
         if (!prev || prev.shift_code === 'OFF') return false
-        const prevShift = shiftById.get(prev.shift_code)
-        if (!prevShift?.end_time || !prevShift?.start_time) return false
-        let endMin = Number(prevShift.end_time.split(':')[0]) * 60 + Number(prevShift.end_time.split(':')[1])
-        const startMin = Number(prevShift.start_time.split(':')[0]) * 60 + Number(prevShift.start_time.split(':')[1])
+        // 優先用排班紀錄的實際時段；若無則 fallback 到班別設定
+        const prevShiftDef = shiftById.get(prev.shift_code)
+        const prevEndRaw = prev.end_time || prevShiftDef?.end_time
+        const prevStartRaw = prev.start_time || prevShiftDef?.start_time
+        if (!prevEndRaw || !prevStartRaw) return false
+        let endMin = Number(prevEndRaw.split(':')[0]) * 60 + Number(prevEndRaw.split(':')[1])
+        const startMin = Number(prevStartRaw.split(':')[0]) * 60 + Number(prevStartRaw.split(':')[1])
         if (endMin <= startMin) endMin += 1440
         return endMin >= 1260
       })()
@@ -1859,10 +1862,12 @@ function AssignModal({
     if (prevD < 1) { prevM = month === 1 ? 12 : month - 1; prevY = month === 1 ? year - 1 : year; prevD = daysInMonth(prevY, prevM) }
     const prev = allAssignments.find((a) => a.employee_id === addTargetId && a.year === prevY && a.month === prevM && a.day === prevD)
     if (!prev || prev.shift_code === 'OFF') return false
-    const prevShift = shiftTypes.find((s) => s.code === prev.shift_code)
-    if (!prevShift?.end_time || !prevShift?.start_time) return false
-    let endMin = Number(prevShift.end_time.split(':')[0]) * 60 + Number(prevShift.end_time.split(':')[1])
-    const startMin = Number(prevShift.start_time.split(':')[0]) * 60 + Number(prevShift.start_time.split(':')[1])
+    const prevShiftDef = shiftTypes.find((s) => s.code === prev.shift_code)
+    const prevEndRaw = prev.end_time || prevShiftDef?.end_time
+    const prevStartRaw = prev.start_time || prevShiftDef?.start_time
+    if (!prevEndRaw || !prevStartRaw) return false
+    let endMin = Number(prevEndRaw.split(':')[0]) * 60 + Number(prevEndRaw.split(':')[1])
+    const startMin = Number(prevStartRaw.split(':')[0]) * 60 + Number(prevStartRaw.split(':')[1])
     if (endMin <= startMin) endMin += 1440
     return endMin >= 1260
   })()
