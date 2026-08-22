@@ -78,6 +78,10 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
     .filter((s) => s.code && s.code !== 'OFF')
     .sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0))
 
+  // 班別代碼 → 班別物件 查詢表
+  const shiftMap = {}
+  for (const s of shiftTypes) shiftMap[s.code] = s
+
   // 早班＝開始時間最早的班別（例如 12:00 的 M 班）；用於「平日早班優先排雙技能者」
   const morningShiftCode = (() => {
     const withTime = workShifts.filter((s) => toMin(s.start_time) !== null)
@@ -136,8 +140,8 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         if (sMin < un[1] && eMin > un[0]) return false
       }
     }
-    // 前一天晚班（結束 ≥ 21:00）→ 今天不能早班（開始 < 12:00）
-    if (shift.code === morningShiftCode && nightShiftCodes.size > 0) {
+    // 前一天晚班（結束 ≥ 21:00）或跨日班別（如 18:00→01:00）→ 今天不能早班
+    if (shift.code === morningShiftCode) {
       let prevY = year, prevM = month, prevD = dayNum - 1
       if (prevD < 1) {
         prevM = month === 1 ? 12 : month - 1
@@ -145,7 +149,17 @@ export function generateSchedule({ year, month, employees, shiftTypes, headcount
         prevD = daysInMonth(prevY, prevM)
       }
       const prevCode = assigned.get(`${empId}:${dateKey(prevY, prevM, prevD)}`)
-      if (prevCode && nightShiftCodes.has(prevCode)) return false
+      if (prevCode && prevCode !== 'OFF') {
+        // 晚班（結束 ≥ 21:00）
+        if (nightShiftCodes.has(prevCode)) return false
+        // 跨日班別（end_time < start_time，例如 18:00→01:00）
+        const prevShift = shiftMap[prevCode]
+        if (prevShift) {
+          const ps = toMin(prevShift.start_time)
+          const pe = toMin(prevShift.end_time)
+          if (ps !== null && pe !== null && pe <= ps) return false
+        }
+      }
     }
     return true
   }

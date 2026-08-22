@@ -2206,8 +2206,8 @@ function SwapModal({
     }
     const sm = Number(start.split(':')[0]) * 60 + Number(start.split(':')[1])
     const em = Number(end.split(':')[0]) * 60 + Number(end.split(':')[1])
-    if (em <= sm) {
-      setError('結束時間需在開始時間之後')
+    if (em === sm) {
+      setError('開始與結束時間不可相同')
       return
     }
     const startErr = shiftStartErrorOf(shiftTypes, toShiftCode, start)

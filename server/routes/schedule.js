@@ -27,7 +27,7 @@ function validShiftTime(start_time, end_time) {
   const s = toMin(start_time)
   const e = toMin(end_time)
   if (s === null || e === null) return false
-  if (e <= s) return false
+  if (e === s) return false // 同時間不合理；跨日（e < s）是合理的
   return true
 }
 
